@@ -22,7 +22,7 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [phoneNumber, setPhoneNumber] = useState("")
-  const [userType, setUserType] = useState<"teacher" | "student" | "parent">("student")
+  const [userType, setUserType] = useState<"teacher" | "student">("student")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
@@ -207,7 +207,7 @@ export default function RegisterPage() {
                     <Label className="text-lg font-medium">نوع المستخدم</Label>
                     <RadioGroup
                       value={userType}
-                      onValueChange={(value) => setUserType(value as "teacher" | "student" | "parent")}
+                      onValueChange={(value) => setUserType(value as "teacher" | "student")}
                       className="flex space-x-4 space-x-reverse"
                     >
                       <div className="flex items-center space-x-2 space-x-reverse">
@@ -217,10 +217,6 @@ export default function RegisterPage() {
                       <div className="flex items-center space-x-2 space-x-reverse">
                         <RadioGroupItem value="teacher" id="teacher" />
                         <Label htmlFor="teacher">معلم/ة</Label>
-                      </div>
-                      <div className="flex items-center space-x-2 space-x-reverse">
-                        <RadioGroupItem value="parent" id="parent" />
-                        <Label htmlFor="parent">ولي أمر</Label>
                       </div>
                     </RadioGroup>
                   </div>

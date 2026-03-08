@@ -29,6 +29,29 @@ interface User {
   lastActive: string
 }
 
+function normalizeStoredUsers(input: unknown): User[] {
+  if (!Array.isArray(input)) return []
+
+  return input
+    .map((raw, index) => {
+      const item = (raw || {}) as Record<string, unknown>
+      const roleValue = String(item.role ?? item.userType ?? "teacher")
+      const normalizedRole = roleValue === "vice_admin" ? "admin" : roleValue
+      const statusValue =
+        item.status !== undefined ? String(item.status) : item.isApproved === false ? "pending" : "active"
+
+      return {
+        id: String(item.id ?? `u-${index + 1}`),
+        name: String(item.name ?? "مستخدم"),
+        email: String(item.email ?? `user${index + 1}@school.edu.sa`),
+        role: normalizedRole,
+        status: statusValue,
+        lastActive: String(item.lastActive ?? "اليوم"),
+      }
+    })
+    .filter((user) => user.role !== "parent" && user.email !== "parent@example.com")
+}
+
 export default function UsersPage() {
   const { toast } = useToast()
   const [users, setUsers] = useState<User[]>([])
@@ -47,7 +70,10 @@ export default function UsersPage() {
   useEffect(() => {
     const savedUsers = localStorage.getItem("users")
     if (savedUsers) {
-      setUsers(JSON.parse(savedUsers))
+      const parsedUsers = JSON.parse(savedUsers)
+      const normalizedUsers = normalizeStoredUsers(parsedUsers)
+      setUsers(normalizedUsers)
+      localStorage.setItem("users", JSON.stringify(normalizedUsers))
     } else {
       // Initialize with sample data only if no saved data exists
       const initialUsers: User[] = [
@@ -77,17 +103,17 @@ export default function UsersPage() {
         },
         {
           id: "4",
-          name: "محمد السالم",
-          email: "mohammed@example.com",
-          role: "parent",
-          status: "pending",
+          name: "مشرف النظام",
+          email: "admin2@school.edu.sa",
+          role: "admin",
+          status: "active",
           lastActive: "منذ 3 أيام",
         },
         {
           id: "5",
           name: "عبدالله الخالد",
           email: "abdullah@example.com",
-          role: "parent",
+          role: "teacher",
           status: "active",
           lastActive: "اليوم، 11:20 ص",
         },
@@ -106,8 +132,8 @@ export default function UsersPage() {
     (user) =>
       user.name.includes(searchQuery) ||
       user.email.includes(searchQuery) ||
-      user.role.includes(searchQuery) ||
-      user.status.includes(searchQuery),
+      (user.role || "").includes(searchQuery) ||
+      (user.status || "").includes(searchQuery),
   )
 
   const handleAddUser = () => {
@@ -180,8 +206,6 @@ export default function UsersPage() {
         return <Badge className="bg-blue-500">مدير</Badge>
       case "teacher":
         return <Badge className="bg-green-500">معلم</Badge>
-      case "parent":
-        return <Badge className="bg-orange-500">ولي أمر</Badge>
       default:
         return <Badge>{role}</Badge>
     }
@@ -262,7 +286,6 @@ export default function UsersPage() {
                     <SelectContent>
                       <SelectItem value="admin">مدير</SelectItem>
                       <SelectItem value="teacher">معلم</SelectItem>
-                      <SelectItem value="parent">ولي أمر</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -378,7 +401,6 @@ export default function UsersPage() {
                   <SelectContent>
                     <SelectItem value="admin">مدير</SelectItem>
                     <SelectItem value="teacher">معلم</SelectItem>
-                    <SelectItem value="parent">ولي أمر</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

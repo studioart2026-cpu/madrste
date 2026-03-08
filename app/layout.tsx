@@ -5,6 +5,7 @@ import "./globals.css"
 import { Toaster } from "@/components/ui/toaster"
 import { AuthProvider } from "@/components/auth-provider"
 import { ThemeProvider } from "@/components/theme-provider"
+import { EnglishNumeralsProvider } from "@/components/english-numerals-provider"
 
 const cairo = Cairo({ subsets: ["arabic"] })
 
@@ -24,6 +25,7 @@ export default function RootLayout({
       <body className={cairo.className}>
         <ThemeProvider defaultTheme="light">
           <AuthProvider>
+            <EnglishNumeralsProvider />
             {children}
             <Toaster />
           </AuthProvider>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, type CSSProperties } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -197,6 +197,37 @@ export default function SchedulePage() {
   const [editEventSubject, setEditEventSubject] = useState("")
   const [editEventTeacher, setEditEventTeacher] = useState("")
   const [editEventRoom, setEditEventRoom] = useState("")
+  const printableScheduleRef = useRef<HTMLDivElement | null>(null)
+
+  const subjectColorMap: Record<string, string> = {
+    الرياضيات: "#dbeafe",
+    "اللغة العربية": "#fce7f3",
+    العلوم: "#dcfce7",
+    "اللغة الإنجليزية": "#fef3c7",
+    "التربية الإسلامية": "#e0e7ff",
+    الاجتماعيات: "#ffedd5",
+    "التربية البدنية": "#dcfce7",
+    الحاسوب: "#cffafe",
+    الفنية: "#f3e8ff",
+  }
+
+  const fallbackColors = ["#e2e8f0", "#d1fae5", "#fef9c3", "#f3e8ff", "#ffedd5", "#dbeafe"]
+
+  const getSubjectColor = (subject: string) => {
+    if (subject === "استراحة") return "#f1f5f9"
+    const known = subjectColorMap[subject]
+    if (known) return known
+
+    const hash = Array.from(subject).reduce((acc, ch) => acc + ch.charCodeAt(0), 0)
+    return fallbackColors[hash % fallbackColors.length]
+  }
+
+  const getPeriodCellStyle = (subject: string) =>
+    ({
+      backgroundColor: getSubjectColor(subject),
+      WebkitPrintColorAdjust: "exact",
+      printColorAdjust: "exact",
+    }) as CSSProperties
 
   // استرجاع البيانات المحفوظة عند تحميل الصفحة
   useEffect(() => {
@@ -376,7 +407,61 @@ export default function SchedulePage() {
 
   // وظيفة طباعة الجدول
   const handlePrint = () => {
-    window.print()
+    if (!printableScheduleRef.current) return
+
+    const printWindow = window.open("", "_blank", "width=1200,height=900")
+    if (!printWindow) return
+
+    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map((node) => node.outerHTML)
+      .join("")
+
+    const className = classes.find((c) => c.id === selectedClass)?.name || "جميع الفصول"
+    const teacherName = selectedTeacher !== "all" ? teachers.find((t) => t.id === selectedTeacher)?.name || "" : ""
+
+    printWindow.document.open()
+    printWindow.document.write(`
+      <!doctype html>
+      <html lang="ar" dir="rtl">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>جدول الحصص - ${className}</title>
+          ${styles}
+          <style>
+            @page { size: A4 landscape; margin: 10mm; }
+            body { direction: rtl; margin: 0; background: #fff; }
+            .print-wrapper { padding: 8px; }
+            .print-heading { margin-bottom: 12px; }
+            .print-heading h1 { font-size: 22px; margin: 0 0 6px 0; }
+            .print-heading p { margin: 0; color: #334155; font-size: 13px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #cbd5e1; padding: 6px; vertical-align: top; }
+            th { background: #e2e8f0; }
+            td, th {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .no-print { display: none !important; }
+          </style>
+        </head>
+        <body>
+          <div class="print-wrapper">
+            <div class="print-heading">
+              <h1>جدول الحصص الأسبوعي</h1>
+              <p>${className}${teacherName ? ` - ${teacherName}` : ""}</p>
+            </div>
+            ${printableScheduleRef.current.innerHTML}
+          </div>
+        </body>
+      </html>
+    `)
+    printWindow.document.close()
+    printWindow.focus()
+    setTimeout(() => {
+      printWindow.print()
+      printWindow.close()
+    }, 250)
   }
 
   // وظيفة إضافة حصة اختبارية سريعة
@@ -667,7 +752,7 @@ export default function SchedulePage() {
           <TabsTrigger value="grid">عرض شبكة</TabsTrigger>
         </TabsList>
         <TabsContent value="table" className="mt-6">
-          <Card>
+          <Card ref={printableScheduleRef}>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle>جدول الحصص الأسبوعي</CardTitle>
@@ -676,7 +761,7 @@ export default function SchedulePage() {
                   {selectedTeacher !== "all" && ` - ${teachers.find((t) => t.id === selectedTeacher)?.name || ""}`}
                 </CardDescription>
               </div>
-              <Button variant="outline" size="sm" className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="flex items-center gap-2 no-print">
                 <Filter className="h-4 w-4" />
                 فلترة متقدمة
               </Button>
@@ -701,7 +786,11 @@ export default function SchedulePage() {
                       <TableRow key={day.id}>
                         <TableCell className="font-medium">{day.day}</TableCell>
                         {day.periods.map((period, periodIndex) => (
-                          <TableCell key={period.id} className={period.subject === "استراحة" ? "bg-gray-100" : ""}>
+                          <TableCell
+                            key={period.id}
+                            style={getPeriodCellStyle(period.subject)}
+                            className="text-slate-900"
+                          >
                             {period.subject !== "استراحة" ? (
                               <div className="text-xs">
                                 <div className="font-medium">{period.subject}</div>
@@ -711,7 +800,7 @@ export default function SchedulePage() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="mt-1 h-6 w-full text-xs"
+                                    className="mt-1 h-6 w-full text-xs no-print"
                                     onClick={() => openEditDialog(dayIndex, periodIndex)}
                                   >
                                     تعديل

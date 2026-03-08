@@ -155,6 +155,7 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [principalPassword, setPrincipalPassword] = useState("")
+  const [confirmPrincipalPassword, setConfirmPrincipalPassword] = useState("")
 
   // حفظ الإعدادات
   const saveSettings = () => {
@@ -226,6 +227,7 @@ export default function SettingsPage() {
 
   const changePrincipalPassword = () => {
     if (userType !== "admin") return
+
     if (!principalPassword || principalPassword.length < 8) {
       toast({
         title: "خطأ",
@@ -235,7 +237,34 @@ export default function SettingsPage() {
       return
     }
 
-    const updated = usersStore.updateUserPassword("principal@school.edu.sa", principalPassword)
+    if (principalPassword !== confirmPrincipalPassword) {
+      toast({
+        title: "خطأ",
+        description: "تأكيد كلمة مرور المديرة غير مطابق",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const principalAccount = usersStore
+      .getUsers()
+      .find((user) => user.email === "principal@school.edu.sa" || user.userType === "vice_admin")
+
+    let updated = false
+    if (principalAccount) {
+      updated = usersStore.updateUserPassword(principalAccount.email, principalPassword)
+    } else {
+      usersStore.addUser({
+        name: "المديرة",
+        email: "principal@school.edu.sa",
+        password: principalPassword,
+        userType: "vice_admin",
+        phoneNumber: "",
+        isApproved: true,
+      })
+      updated = true
+    }
+
     if (!updated) {
       toast({
         title: "خطأ",
@@ -246,6 +275,7 @@ export default function SettingsPage() {
     }
 
     setPrincipalPassword("")
+    setConfirmPrincipalPassword("")
     toast({
       title: "تم التحديث",
       description: "تم تغيير كلمة مرور المديرة بنجاح",
@@ -384,6 +414,14 @@ export default function SettingsPage() {
                     value={principalPassword}
                     onChange={(e) => setPrincipalPassword(e.target.value)}
                     placeholder="تحديث كلمة مرور حساب المديرة"
+                  />
+                  <Label htmlFor="confirmPrincipalPassword">تأكيد كلمة مرور المديرة</Label>
+                  <Input
+                    id="confirmPrincipalPassword"
+                    type="password"
+                    value={confirmPrincipalPassword}
+                    onChange={(e) => setConfirmPrincipalPassword(e.target.value)}
+                    placeholder="أعيدي كتابة كلمة مرور المديرة"
                   />
                   <Button type="button" variant="outline" onClick={changePrincipalPassword}>
                     تحديث كلمة مرور المديرة

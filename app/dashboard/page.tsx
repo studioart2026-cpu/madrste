@@ -1,20 +1,80 @@
 "use client"
 
 import type React from "react"
+import { useEffect, useState } from "react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { CalendarIcon, Clock, GraduationCap, School, Users } from "lucide-react"
+import { CalendarIcon, Clock, GraduationCap, Save, School, SquarePen, Users, X } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useAuth } from "@/components/auth-provider"
 import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
 
 export default function DashboardPage() {
-  const { userName, userType } = useAuth()
+  const { userName, userType, email } = useAuth()
 
   const isAdmin = userType === "admin"
+  const canEditPrincipalMessage =
+    userType === "admin" ||
+    userType === "vice_admin" ||
+    email === "principal@school.edu.sa" ||
+    email === "mohamm3dalfeel@gmail.com" ||
+    email === "admin2@school.edu.sa"
   const isTeacher = userType === "teacher"
   const isStudent = userType === "student"
+  const principalTitleStorageKey = "dashboard-principal-message-title"
+  const principalBodyStorageKey = "dashboard-principal-message-body"
+  const defaultPrincipalTitle = "كلمة المديرة: الجازي العقيل للطالبات 💖"
+  const defaultPrincipalBody = `بناتي الغاليات،
+السلام عليكن ورحمة الله وبركاته،
+أود أن أعبّر عن فخري الكبير بكن اليوم... أنتن الأمل والمستقبل، وبكن نرتقي ونفخر. اجتهدن، وامنحن أنفسكن الفرصة لتألّق لا ينطفئ. تذكّرن دائمًا أن الطموح لا سقف له، وأن لكل مجتهدة نصيب.
+أثق أنكن قادرات على تحقيق أحلامكن، فكوني أنتِ البداية الجميلة لما تتمنين 💫
+مع أطيب الأمنيات بالتوفيق والنجاح،
+مديرتكن المحبة: الجازي العقيل 🌷`
+  const [principalMessageTitle, setPrincipalMessageTitle] = useState(defaultPrincipalTitle)
+  const [principalMessageBody, setPrincipalMessageBody] = useState(defaultPrincipalBody)
+  const [draftPrincipalMessageTitle, setDraftPrincipalMessageTitle] = useState(defaultPrincipalTitle)
+  const [draftPrincipalMessageBody, setDraftPrincipalMessageBody] = useState(defaultPrincipalBody)
+  const [isEditingPrincipalMessage, setIsEditingPrincipalMessage] = useState(false)
+
+  useEffect(() => {
+    const storedTitle = localStorage.getItem(principalTitleStorageKey)
+    const storedBody = localStorage.getItem(principalBodyStorageKey)
+
+    if (storedTitle?.trim()) {
+      setPrincipalMessageTitle(storedTitle)
+      setDraftPrincipalMessageTitle(storedTitle)
+    }
+    if (storedBody?.trim()) {
+      setPrincipalMessageBody(storedBody)
+      setDraftPrincipalMessageBody(storedBody)
+    }
+  }, [])
+
+  const startEditPrincipalMessage = () => {
+    setDraftPrincipalMessageTitle(principalMessageTitle)
+    setDraftPrincipalMessageBody(principalMessageBody)
+    setIsEditingPrincipalMessage(true)
+  }
+
+  const cancelEditPrincipalMessage = () => {
+    setDraftPrincipalMessageTitle(principalMessageTitle)
+    setDraftPrincipalMessageBody(principalMessageBody)
+    setIsEditingPrincipalMessage(false)
+  }
+
+  const savePrincipalMessage = () => {
+    const nextTitle = draftPrincipalMessageTitle.trim() || defaultPrincipalTitle
+    const nextBody = draftPrincipalMessageBody.trim() || defaultPrincipalBody
+
+    setPrincipalMessageTitle(nextTitle)
+    setPrincipalMessageBody(nextBody)
+    localStorage.setItem(principalTitleStorageKey, nextTitle)
+    localStorage.setItem(principalBodyStorageKey, nextBody)
+    setIsEditingPrincipalMessage(false)
+  }
 
   const getCurrentDay = () => {
     const days = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"]
@@ -49,24 +109,59 @@ export default function DashboardPage() {
       {/* كلمة المديرة */}
       <Card className="border-2 border-[#0a8a74]/20 bg-gradient-to-r from-white to-[#0a8a74]/5">
         <CardHeader className="pb-2">
-          <CardTitle className="text-lg font-medium flex items-center gap-2 text-[#0a8a74]">
-            <MessageCircleHeartIcon className="w-5 h-5 text-[#0a8a74]" />
-            <span>كلمة المديرة: الجازي العقيل للطالبات 💖</span>
-          </CardTitle>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-lg font-medium flex items-center gap-2 text-[#0a8a74]">
+              <MessageCircleHeartIcon className="w-5 h-5 text-[#0a8a74]" />
+              <span>{principalMessageTitle}</span>
+            </CardTitle>
+            {canEditPrincipalMessage && !isEditingPrincipalMessage && (
+              <Button variant="outline" size="sm" onClick={startEditPrincipalMessage}>
+                <SquarePen className="ml-1 h-4 w-4" />
+                تعديل
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-3 text-gray-700">
-          <p>بناتي الغاليات،</p>
-          <p>السلام عليكن ورحمة الله وبركاته،</p>
-          <p>
-            أود أن أعبّر عن فخري الكبير بكن اليوم... أنتن الأمل والمستقبل، وبكن نرتقي ونفخر. اجتهدن، وامنحن أنفسكن الفرصة
-            لتألّق لا ينطفئ. تذكّرن دائمًا أن الطموح لا سقف له، وأن لكل مجتهدة نصيب.
-          </p>
-          <p>أثق أنكن قادرات على تحقيق أحلامكن، فكوني أنتِ البداية الجميلة لما تتمنين 💫</p>
-          <p className="pt-2">
-            مع أطيب الأمنيات بالتوفيق والنجاح،
-            <br />
-            <span className="font-semibold text-[#0a8a74]">مديرتكن المحبة: الجازي العقيل 🌷</span>
-          </p>
+          {canEditPrincipalMessage && isEditingPrincipalMessage ? (
+            <div className="space-y-3">
+              <div>
+                <p className="mb-1 text-sm text-muted-foreground">عنوان الكلمة</p>
+                <Textarea
+                  value={draftPrincipalMessageTitle}
+                  onChange={(e) => setDraftPrincipalMessageTitle(e.target.value)}
+                  rows={2}
+                />
+              </div>
+              <div>
+                <p className="mb-1 text-sm text-muted-foreground">نص الكلمة</p>
+                <Textarea
+                  value={draftPrincipalMessageBody}
+                  onChange={(e) => setDraftPrincipalMessageBody(e.target.value)}
+                  rows={8}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={savePrincipalMessage} className="bg-[#0a8a74] hover:bg-[#097a67]">
+                  <Save className="ml-1 h-4 w-4" />
+                  حفظ
+                </Button>
+                <Button variant="outline" onClick={cancelEditPrincipalMessage}>
+                  <X className="ml-1 h-4 w-4" />
+                  إلغاء
+                </Button>
+              </div>
+            </div>
+          ) : (
+            principalMessageBody
+              .split("\n")
+              .filter((line) => line.trim().length > 0)
+              .map((line, idx, arr) => (
+                <p key={`${line}-${idx}`} className={idx === arr.length - 1 ? "pt-2 font-semibold text-[#0a8a74]" : ""}>
+                  {line}
+                </p>
+              ))
+          )}
         </CardContent>
       </Card>
 

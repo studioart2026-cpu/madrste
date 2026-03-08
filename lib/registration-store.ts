@@ -57,15 +57,6 @@ export const initialRequests: RegistrationRequest[] = [
     date: "2023-05-12",
     status: "pending",
   },
-  {
-    id: "6",
-    name: "مي علي",
-    email: "parent1@example.com",
-    userType: "parent",
-    phoneNumber: "0591234567",
-    date: "2023-05-13",
-    status: "pending",
-  },
 ]
 
 // مخزن طلبات التسجيل - نمط Singleton للتأكد من وجود نسخة واحدة فقط
@@ -78,6 +69,7 @@ class RegistrationStore {
   private constructor() {
     // تحميل البيانات من التخزين المحلي عند إنشاء المخزن
     this.loadFromStorage()
+    this.requests = this.normalizeRequests(this.requests)
   }
 
   public static getInstance(): RegistrationStore {
@@ -146,6 +138,7 @@ class RegistrationStore {
         try {
           // استخدام البيانات المخزنة بدلاً من البيانات الافتراضية
           this.requests = JSON.parse(storedRequests)
+          this.requests = this.normalizeRequests(this.requests)
           console.log("تم تحميل طلبات التسجيل من التخزين المحلي:", this.requests.length)
         } catch (e) {
           console.error("خطأ في تحميل طلبات التسجيل من التخزين المحلي:", e)
@@ -161,6 +154,10 @@ class RegistrationStore {
         }
       }
     }
+  }
+
+  private normalizeRequests(requests: RegistrationRequest[]): RegistrationRequest[] {
+    return requests.filter((req) => req.userType !== "parent" && req.email !== "parent@example.com")
   }
 
   // نظام الاشتراك للإشعار بالتغييرات

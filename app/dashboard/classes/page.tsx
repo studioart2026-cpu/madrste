@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -228,6 +228,8 @@ const teachersList = [
 ]
 
 export default function ClassesPage() {
+  const CLASSES_STORAGE_KEY = "classes-data-v1"
+
   // حالة الفصول
   const [classes, setClasses] = useState<Class[]>(initialClassesData)
   const [selectedClass, setSelectedClass] = useState<string | null>(null)
@@ -251,6 +253,23 @@ export default function ClassesPage() {
     capacity: 30,
     term: "الترم الأول" as "الترم الأول" | "الترم الثاني",
   })
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(CLASSES_STORAGE_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as Class[]
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setClasses(parsed)
+      }
+    } catch {
+      // ignore invalid local storage data and keep defaults
+    }
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem(CLASSES_STORAGE_KEY, JSON.stringify(classes))
+  }, [classes])
 
   // تصفية الفصول حسب الترم
   const firstTermClasses = classes.filter((cls) => cls.term === "الترم الأول")
@@ -306,11 +325,27 @@ export default function ClassesPage() {
 
   // إضافة فصل جديد من النموذج
   const handleAddClass = () => {
+    const normalizedSection = newClassData.section.trim()
+
     // التحقق من البيانات
-    if (!newClassData.section) {
+    if (!normalizedSection) {
       toast({
         title: "خطأ",
         description: "يرجى إدخال رقم الشعبة",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const duplicateClass = classes.some(
+      (cls) =>
+        cls.term === newClassData.term && cls.level === newClassData.level && cls.section.trim() === normalizedSection,
+    )
+
+    if (duplicateClass) {
+      toast({
+        title: "تعذر الإضافة",
+        description: "الفصل موجود مسبقًا بنفس الترم والمرحلة والشعبة",
         variant: "destructive",
       })
       return
@@ -322,9 +357,9 @@ export default function ClassesPage() {
     // إنشاء كائن الفصل الجديد
     const newClass: Class = {
       id: newId,
-      name: `${newClassData.level}/${newClassData.section}`,
+      name: `${newClassData.level}/${normalizedSection}`,
       level: newClassData.level,
-      section: newClassData.section,
+      section: normalizedSection,
       teacher: newClassData.teacher,
       students: 0,
       rating: 0,
@@ -334,6 +369,8 @@ export default function ClassesPage() {
 
     // تحديث قائمة الفصول
     setClasses((prevClasses) => [...prevClasses, newClass])
+    setActiveTab(newClass.term === "الترم الأول" ? "term1" : "term2")
+    setSearchQuery("")
 
     // إغلاق مربع الحوار
     setIsAddDialogOpen(false)

@@ -74,10 +74,10 @@ export const initialUsers: User[] = [
   },
   {
     id: "7",
-    name: "أحمد ولي الأمر",
-    email: "parent@example.com",
-    password: "parent123",
-    userType: "parent",
+    name: "مشرف النظام",
+    email: "admin2@school.edu.sa",
+    password: "Admin@123",
+    userType: "admin",
     phoneNumber: "0505678901",
     isApproved: true,
     createdAt: "2023-01-07",
@@ -93,6 +93,8 @@ class UsersStore {
   private constructor() {
     // تحميل البيانات من التخزين المحلي عند إنشاء المخزن
     this.loadFromStorage()
+    this.users = this.normalizeUsers(this.users)
+    this.saveToStorage()
   }
 
   public static getInstance(): UsersStore {
@@ -200,6 +202,7 @@ class UsersStore {
         try {
           // استخدام البيانات المخزنة بدلاً من البيانات الافتراضية
           this.users = JSON.parse(storedUsers)
+          this.users = this.normalizeUsers(this.users)
           console.log("تم تحميل بيانات المستخدمين من التخزين المحلي:", this.users.length)
         } catch (e) {
           console.error("خطأ في تحميل بيانات المستخدمين من التخزين المحلي:", e)
@@ -213,6 +216,26 @@ class UsersStore {
         this.saveToStorage()
       }
     }
+  }
+
+  private normalizeUsers(users: User[]): User[] {
+    const filteredUsers = users.filter((user) => user.email !== "parent@example.com")
+    const hasSecondaryAdmin = filteredUsers.some((user) => user.email === "admin2@school.edu.sa")
+
+    if (!hasSecondaryAdmin) {
+      filteredUsers.push({
+        id: (filteredUsers.length + 1).toString(),
+        name: "مشرف النظام",
+        email: "admin2@school.edu.sa",
+        password: "Admin@123",
+        userType: "admin",
+        phoneNumber: "0505678901",
+        isApproved: true,
+        createdAt: new Date().toISOString().split("T")[0],
+      })
+    }
+
+    return filteredUsers
   }
 
   // نظام الاشتراك للإشعار بالتغييرات

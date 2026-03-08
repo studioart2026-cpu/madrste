@@ -292,9 +292,12 @@ const subjects = [
   "أشغال يدوية",
 ]
 
+const TEACHERS_STORAGE_KEY = "teachersData"
+
 export default function TeachersPage() {
   const { toast } = useToast()
   const [teachers, setTeachers] = useState<Teacher[]>(initialTeachers)
+  const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterSpecialization, setFilterSpecialization] = useState<string>("")
   const [filterDepartment, setFilterDepartment] = useState<string>("")
@@ -333,6 +336,29 @@ export default function TeachersPage() {
     classes: [],
     subjects: [],
   })
+
+  // تحميل بيانات المعلمات من localStorage عند فتح الصفحة
+  useEffect(() => {
+    try {
+      const savedTeachers = localStorage.getItem(TEACHERS_STORAGE_KEY)
+      if (savedTeachers) {
+        const parsedTeachers = JSON.parse(savedTeachers)
+        if (Array.isArray(parsedTeachers)) {
+          setTeachers(parsedTeachers)
+        }
+      }
+    } catch (error) {
+      console.error("فشل تحميل بيانات المعلمات من التخزين المحلي:", error)
+    } finally {
+      setHasLoadedFromStorage(true)
+    }
+  }, [])
+
+  // حفظ بيانات المعلمات تلقائياً بعد أي تعديل
+  useEffect(() => {
+    if (!hasLoadedFromStorage) return
+    localStorage.setItem(TEACHERS_STORAGE_KEY, JSON.stringify(teachers))
+  }, [teachers, hasLoadedFromStorage])
 
   // محاكاة تحميل البيانات
   useEffect(() => {
@@ -397,7 +423,8 @@ export default function TeachersPage() {
 
   // إضافة معلمة جديدة
   const handleAddTeacher = () => {
-    const newId = (Math.max(...teachers.map((t) => Number.parseInt(t.id))) + 1).toString()
+    const maxId = teachers.length > 0 ? Math.max(...teachers.map((t) => Number.parseInt(t.id, 10) || 0)) : 0
+    const newId = (maxId + 1).toString()
     const teacherWithId = {
       ...newTeacher,
       id: newId,

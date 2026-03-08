@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { FileDown, Printer } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
+import { useToast } from "@/hooks/use-toast"
 
 interface StudentProfile {
   id: string
@@ -114,7 +115,10 @@ function getStatusVariant(status: "حاضر" | "غائب" | "متأخر"): "defa
 
 export default function ReportsPage() {
   const { userType, email, userName } = useAuth()
+  const { toast } = useToast()
   const isStudent = userType === "student"
+  const reportRef = useRef<HTMLDivElement | null>(null)
+  const [isExporting, setIsExporting] = useState(false)
 
   const inferredStudentName = (email && studentEmailToName[email]) || userName || ""
   const defaultStudent = studentProfiles.find((s) => s.name === inferredStudentName) || studentProfiles[0]
@@ -237,30 +241,154 @@ export default function ReportsPage() {
 
   const attendanceRate = total > 0 ? (present / total) * 100 : 0
 
-  const exportPdf = () => {
-    window.print()
+  const getSafeStudentFileName = () => {
+    const cleaned = selectedStudent.name.replace(/[\\/:*?"<>|]/g, "-").trim()
+    return cleaned || "تقرير-طالبة"
+  }
+
+  const printReport = () => {
+    if (!reportRef.current) return
+
+    const printWindow = window.open("", "_blank", "width=1024,height=1400")
+    if (!printWindow) {
+      toast({
+        title: "تعذر الطباعة",
+        description: "يرجى السماح بفتح نافذة الطباعة من المتصفح.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map((node) => node.outerHTML)
+      .join("")
+
+    const content = reportRef.current.innerHTML
+    const title = selectedStudent.name
+
+    printWindow.document.open()
+    printWindow.document.write(`
+      <!doctype html>
+      <html lang="ar" dir="rtl">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>${title}</title>
+          ${styles}
+          <style>
+            body { direction: rtl; margin: 16px; background: #fff; }
+            .print\\:hidden, .no-print { display: none !important; }
+          </style>
+        </head>
+        <body>
+          ${content}
+        </body>
+      </html>
+    `)
+    printWindow.document.close()
+    printWindow.focus()
+    setTimeout(() => {
+      printWindow.print()
+      printWindow.close()
+    }, 250)
+  }
+
+  const exportPdf = async () => {
+    if (!reportRef.current || isExporting) return
+
+    try {
+      setIsExporting(true)
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")])
+
+      const canvas = await html2canvas(reportRef.current, {
+        scale: Math.min(window.devicePixelRatio || 2, 3),
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        windowWidth: reportRef.current.scrollWidth,
+        windowHeight: reportRef.current.scrollHeight,
+      })
+      const pdf = new jsPDF("p", "mm", "a4")
+      const pageWidth = pdf.internal.pageSize.getWidth()
+      const pageHeight = pdf.internal.pageSize.getHeight()
+      const margin = 8
+      const printableWidth = pageWidth - margin * 2
+      const printableHeight = pageHeight - margin * 2
+      const pxPerMm = canvas.width / printableWidth
+      const pageHeightPx = Math.floor(printableHeight * pxPerMm)
+
+      let renderedHeightPx = 0
+      let pageIndex = 0
+
+      while (renderedHeightPx < canvas.height) {
+        const sliceHeightPx = Math.min(pageHeightPx, canvas.height - renderedHeightPx)
+        const pageCanvas = document.createElement("canvas")
+        pageCanvas.width = canvas.width
+        pageCanvas.height = sliceHeightPx
+
+        const pageContext = pageCanvas.getContext("2d")
+        if (!pageContext) throw new Error("Failed to create page canvas context")
+
+        pageContext.fillStyle = "#ffffff"
+        pageContext.fillRect(0, 0, pageCanvas.width, pageCanvas.height)
+        pageContext.drawImage(
+          canvas,
+          0,
+          renderedHeightPx,
+          canvas.width,
+          sliceHeightPx,
+          0,
+          0,
+          canvas.width,
+          sliceHeightPx,
+        )
+
+        const sliceHeightMm = sliceHeightPx / pxPerMm
+        const image = pageCanvas.toDataURL("image/png", 1)
+
+        if (pageIndex > 0) {
+          pdf.addPage()
+        }
+        pdf.addImage(image, "PNG", margin, margin, printableWidth, sliceHeightMm, undefined, "FAST")
+
+        renderedHeightPx += sliceHeightPx
+        pageIndex += 1
+      }
+
+      pdf.save(`${getSafeStudentFileName()}.pdf`)
+    } catch (error) {
+      console.error("PDF export failed:", error)
+      toast({
+        title: "تعذر التصدير",
+        description: "حدث خطأ أثناء إنشاء ملف PDF. جربي مرة أخرى.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsExporting(false)
+    }
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div ref={reportRef} className="space-y-6 print:space-y-3 print:text-black" dir="rtl">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 print:gap-2">
         <div>
-          <h1 className="text-3xl font-bold">التقارير</h1>
-          <p className="text-muted-foreground mt-1">تقرير متكامل عن حالة الطالبة (درجات + حضور + غياب + تأخر)</p>
+          <h1 className="text-3xl font-bold print:text-2xl">{selectedStudent.name}</h1>
+          <p className="text-muted-foreground mt-1 print:text-black">
+            تقرير متكامل عن حالة الطالبة (درجات + حضور + غياب + تأخر)
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={exportPdf}>
+        <div className="flex items-center gap-2 print:hidden">
+          <Button variant="outline" onClick={exportPdf} disabled={isExporting}>
             <FileDown className="ml-2 h-4 w-4" />
-            تصدير PDF
+            {isExporting ? "جاري التصدير..." : "تصدير PDF"}
           </Button>
-          <Button variant="outline" onClick={() => window.print()}>
+          <Button variant="outline" onClick={printReport}>
             <Printer className="ml-2 h-4 w-4" />
             طباعة
           </Button>
         </div>
       </div>
 
-      <Card>
+      <Card className="print:hidden">
         <CardHeader>
           <CardTitle>خيارات التقرير</CardTitle>
           <CardDescription>الترمين المعتمدان: الترم الأول والترم الثاني</CardDescription>
@@ -341,7 +469,7 @@ export default function ReportsPage() {
         </Card>
       </div>
 
-      <Card>
+      <Card className="print:break-inside-avoid">
         <CardHeader>
           <CardTitle>تقرير الدرجات - {selectedTerm}</CardTitle>
         </CardHeader>
@@ -368,7 +496,7 @@ export default function ReportsPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="print:break-inside-avoid">
         <CardHeader>
           <CardTitle>تقرير الحضور والغياب والتأخر - {selectedTerm}</CardTitle>
         </CardHeader>
