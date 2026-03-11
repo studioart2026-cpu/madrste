@@ -20,19 +20,11 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Toaster } from "@/components/ui/toaster"
 import { toast } from "@/components/ui/use-toast"
+import { fetchClassesData, saveClassesData } from "@/lib/school-api"
+import { defaultSchoolClasses, type SchoolClass } from "@/lib/school-data"
+import { teacherNames } from "@/lib/teachers-directory"
 
-// تعريف نموذج بيانات الفصل
-interface Class {
-  id: string
-  name: string
-  level: "١" | "٢" | "٣"
-  section: string
-  teacher: string
-  students: number
-  rating: number
-  capacity: number
-  term: "الترم الأول" | "الترم الثاني"
-}
+type Class = SchoolClass
 
 // بيانات تجريبية للفصول
 const initialClassesData: Class[] = [
@@ -42,7 +34,7 @@ const initialClassesData: Class[] = [
     name: "١/١",
     level: "١",
     section: "١",
-    teacher: "أ. فاطمة محمد",
+    teacher: "أ. نورة الأحمد",
     students: 25,
     rating: 4.5,
     capacity: 30,
@@ -53,7 +45,7 @@ const initialClassesData: Class[] = [
     name: "١/٢",
     level: "١",
     section: "٢",
-    teacher: "أ. نورة أحمد",
+    teacher: "أ. سارة المحمد",
     students: 22,
     rating: 4.2,
     capacity: 30,
@@ -64,7 +56,7 @@ const initialClassesData: Class[] = [
     name: "٢/١",
     level: "٢",
     section: "١",
-    teacher: "أ. ليلى عبدالله",
+    teacher: "أ. منى العبدالله",
     students: 30,
     rating: 4.1,
     capacity: 35,
@@ -75,7 +67,7 @@ const initialClassesData: Class[] = [
     name: "٢/٢",
     level: "٢",
     section: "٢",
-    teacher: "أ. رنا محمد",
+    teacher: "أ. هند السعد",
     students: 28,
     rating: 3.9,
     capacity: 35,
@@ -86,7 +78,7 @@ const initialClassesData: Class[] = [
     name: "٣/١",
     level: "٣",
     section: "١",
-    teacher: "أ. جواهر محمد",
+    teacher: "أ. عبير الخالد",
     students: 32,
     rating: 4.6,
     capacity: 40,
@@ -99,7 +91,7 @@ const initialClassesData: Class[] = [
     name: "١/٣",
     level: "١",
     section: "٣",
-    teacher: "أ. عائشة علي",
+    teacher: "أ. ريم الفهد",
     students: 28,
     rating: 3.8,
     capacity: 30,
@@ -110,7 +102,7 @@ const initialClassesData: Class[] = [
     name: "١/٤",
     level: "١",
     section: "٤",
-    teacher: "أ. هدى محمد",
+    teacher: "أ. لمياء السلطان",
     students: 26,
     rating: 4.0,
     capacity: 30,
@@ -121,7 +113,7 @@ const initialClassesData: Class[] = [
     name: "٢/٣",
     level: "٢",
     section: "٣",
-    teacher: "أ. دانة سعيد",
+    teacher: "أ. أمل الناصر",
     students: 26,
     rating: 4.4,
     capacity: 35,
@@ -132,7 +124,7 @@ const initialClassesData: Class[] = [
     name: "٢/٤",
     level: "٢",
     section: "٤",
-    teacher: "أ. منى علي",
+    teacher: "أ. نوف العتيبي",
     students: 27,
     rating: 4.3,
     capacity: 35,
@@ -143,7 +135,7 @@ const initialClassesData: Class[] = [
     name: "٣/٢",
     level: "٣",
     section: "٢",
-    teacher: "أ. نوف أحمد",
+    teacher: "أ. نورة الأحمد",
     students: 30,
     rating: 4.2,
     capacity: 40,
@@ -156,7 +148,7 @@ const initialClassesData: Class[] = [
     name: "١/٥",
     level: "١",
     section: "٥",
-    teacher: "أ. سارة خالد",
+    teacher: "أ. سارة المحمد",
     students: 24,
     rating: 4.7,
     capacity: 30,
@@ -167,7 +159,7 @@ const initialClassesData: Class[] = [
     name: "٢/٥",
     level: "٢",
     section: "٥",
-    teacher: "أ. هند أحمد",
+    teacher: "أ. منى العبدالله",
     students: 29,
     rating: 4.5,
     capacity: 35,
@@ -178,7 +170,7 @@ const initialClassesData: Class[] = [
     name: "٢/٦",
     level: "٢",
     section: "٦",
-    teacher: "أ. نوف محمد",
+    teacher: "أ. هند السعد",
     students: 31,
     rating: 4.2,
     capacity: 35,
@@ -189,7 +181,7 @@ const initialClassesData: Class[] = [
     name: "٣/٣",
     level: "٣",
     section: "٣",
-    teacher: "أ. هيفاء علي",
+    teacher: "أ. عبير الخالد",
     students: 28,
     rating: 4.8,
     capacity: 40,
@@ -200,7 +192,7 @@ const initialClassesData: Class[] = [
     name: "٣/٤",
     level: "٣",
     section: "٤",
-    teacher: "أ. ريم عبدالله",
+    teacher: "أ. ريم الفهد",
     students: 34,
     rating: 4.4,
     capacity: 40,
@@ -208,33 +200,16 @@ const initialClassesData: Class[] = [
   },
 ]
 
-// قائمة المعلمين
-const teachersList = [
-  "أ. فاطمة محمد",
-  "أ. نورة أحمد",
-  "أ. عائشة علي",
-  "أ. هدى محمد",
-  "أ. سارة خالد",
-  "أ. ليلى عبدالله",
-  "أ. رنا محمد",
-  "أ. دانة سعيد",
-  "أ. منى علي",
-  "أ. هند أحمد",
-  "أ. نوف محمد",
-  "أ. جواهر محمد",
-  "أ. نوف أحمد",
-  "أ. هيفاء علي",
-  "أ. ريم عبدالله",
-]
+// قائمة المعلمات المعتمدة
+const teachersList = teacherNames
 
 export default function ClassesPage() {
-  const CLASSES_STORAGE_KEY = "classes-data-v1"
-
   // حالة الفصول
-  const [classes, setClasses] = useState<Class[]>(initialClassesData)
+  const [classes, setClasses] = useState<Class[]>(defaultSchoolClasses)
   const [selectedClass, setSelectedClass] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [activeTab, setActiveTab] = useState<string>("term1")
+  const [isSaving, setIsSaving] = useState(false)
 
   // حالات مربعات الحوار
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
@@ -255,21 +230,51 @@ export default function ClassesPage() {
   })
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(CLASSES_STORAGE_KEY)
-      if (!raw) return
-      const parsed = JSON.parse(raw) as Class[]
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        setClasses(parsed)
+    let isMounted = true
+
+    const loadClasses = async () => {
+      try {
+        const response = await fetchClassesData()
+        if (!isMounted) {
+          return
+        }
+        setClasses(Array.isArray(response.classes) && response.classes.length > 0 ? response.classes : defaultSchoolClasses)
+      } catch {
+        if (!isMounted) {
+          return
+        }
+        setClasses(defaultSchoolClasses)
       }
-    } catch {
-      // ignore invalid local storage data and keep defaults
+    }
+
+    void loadClasses()
+
+    return () => {
+      isMounted = false
     }
   }, [])
 
-  useEffect(() => {
-    localStorage.setItem(CLASSES_STORAGE_KEY, JSON.stringify(classes))
-  }, [classes])
+  const persistClasses = async (nextClasses: Class[]) => {
+    const previousClasses = classes
+    setClasses(nextClasses)
+    setIsSaving(true)
+
+    try {
+      const response = await saveClassesData(nextClasses)
+      setClasses(response.classes)
+      return true
+    } catch (error) {
+      setClasses(previousClasses)
+      toast({
+        title: "تعذر حفظ الفصول",
+        description: error instanceof Error ? error.message : "حدث خطأ أثناء حفظ بيانات الفصول",
+        variant: "destructive",
+      })
+      return false
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   // تصفية الفصول حسب الترم
   const firstTermClasses = classes.filter((cls) => cls.term === "الترم الأول")
@@ -300,14 +305,14 @@ export default function ClassesPage() {
   }
 
   // إضافة فصل جديد بشكل مباشر (للاختبار)
-  const addTestClass = () => {
+  const addTestClass = async () => {
     const newId = `test-${Date.now()}`
     const newClass: Class = {
       id: newId,
       name: "١/٩٩",
       level: "١",
       section: "٩٩",
-      teacher: "أ. فاطمة محمد",
+      teacher: teachersList[0],
       students: 0,
       rating: 0,
       capacity: 30,
@@ -315,7 +320,10 @@ export default function ClassesPage() {
     }
 
     const updatedClasses = [...classes, newClass]
-    setClasses(updatedClasses)
+    const saved = await persistClasses(updatedClasses)
+    if (!saved) {
+      return
+    }
 
     toast({
       title: "تم بنجاح",
@@ -324,7 +332,7 @@ export default function ClassesPage() {
   }
 
   // إضافة فصل جديد من النموذج
-  const handleAddClass = () => {
+  const handleAddClass = async () => {
     const normalizedSection = newClassData.section.trim()
 
     // التحقق من البيانات
@@ -368,7 +376,10 @@ export default function ClassesPage() {
     }
 
     // تحديث قائمة الفصول
-    setClasses((prevClasses) => [...prevClasses, newClass])
+    const saved = await persistClasses([...classes, newClass])
+    if (!saved) {
+      return
+    }
     setActiveTab(newClass.term === "الترم الأول" ? "term1" : "term2")
     setSearchQuery("")
 
@@ -392,11 +403,14 @@ export default function ClassesPage() {
   }
 
   // تعديل فصل
-  const handleEditClass = () => {
+  const handleEditClass = async () => {
     if (!classToEdit) return
 
     const updatedClasses = classes.map((cls) => (cls.id === classToEdit.id ? classToEdit : cls))
-    setClasses(updatedClasses)
+    const saved = await persistClasses(updatedClasses)
+    if (!saved) {
+      return
+    }
     setIsEditDialogOpen(false)
     setClassToEdit(null)
 
@@ -407,11 +421,14 @@ export default function ClassesPage() {
   }
 
   // حذف فصل
-  const handleDeleteClass = () => {
+  const handleDeleteClass = async () => {
     if (!classToDelete) return
 
     const updatedClasses = classes.filter((cls) => cls.id !== classToDelete.id)
-    setClasses(updatedClasses)
+    const saved = await persistClasses(updatedClasses)
+    if (!saved) {
+      return
+    }
     setIsDeleteDialogOpen(false)
     setClassToDelete(null)
 
@@ -620,7 +637,7 @@ export default function ClassesPage() {
           </Select>
         </div>
         <div className="flex items-end">
-          <Button onClick={handleAddClass} className="w-full">
+          <Button onClick={() => void handleAddClass()} className="w-full" disabled={isSaving}>
             <Plus className="ml-2 h-4 w-4" />
             إضافة فصل
           </Button>
@@ -634,7 +651,7 @@ export default function ClassesPage() {
       <div className="flex flex-row-reverse justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">إدارة الفصول الدراسية</h1>
         <div className="flex gap-2">
-          <Button onClick={addTestClass} variant="outline">
+          <Button onClick={() => void addTestClass()} variant="outline" disabled={isSaving}>
             إضافة فصل اختباري
           </Button>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
@@ -741,7 +758,7 @@ export default function ClassesPage() {
                 >
                   إلغاء
                 </Button>
-                <Button type="button" onClick={handleAddClass}>
+                <Button type="button" onClick={() => void handleAddClass()} disabled={isSaving}>
                   إضافة
                 </Button>
               </DialogFooter>
@@ -910,7 +927,7 @@ export default function ClassesPage() {
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
               إلغاء
             </Button>
-            <Button onClick={handleEditClass}>حفظ</Button>
+            <Button onClick={() => void handleEditClass()} disabled={isSaving}>حفظ</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -928,7 +945,7 @@ export default function ClassesPage() {
             <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
               إلغاء
             </Button>
-            <Button variant="destructive" onClick={handleDeleteClass}>
+            <Button variant="destructive" onClick={() => void handleDeleteClass()} disabled={isSaving}>
               حذف
             </Button>
           </DialogFooter>

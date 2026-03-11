@@ -67,6 +67,22 @@ import { motion, AnimatePresence } from "framer-motion"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Switch } from "@/components/ui/switch"
 import { useAuth } from "@/components/auth-provider"
+import { fetchStudents as fetchStudentsData, saveStudents as saveStudentsData } from "@/lib/school-api"
+import {
+  defaultClassrooms as classrooms,
+  defaultGrades as grades,
+  defaultStudentRoster,
+  mergeWithDefaultStudentRoster,
+} from "@/lib/student-roster"
+
+const normalizeArabicText = (value: string) =>
+  value
+    .replace(/[أإآا]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase()
 
 // نموذج بيانات الطالبة
 interface Student {
@@ -91,224 +107,6 @@ interface Student {
   joinDate?: string
   activities?: string[]
 }
-
-// بيانات تجريبية للطالبات
-const initialStudents: Student[] = [
-  {
-    id: "1",
-    name: "سارة أحمد",
-    studentId: "10001",
-    grade: "أول متوسط",
-    classroom: "١/١",
-    parentPhone: "0501234567",
-    status: "نشط",
-    birthDate: "2018-05-15",
-    address: "الرياض، حي النزهة",
-    attendance: 95,
-    academicPerformance: 88,
-    behaviorRating: 92,
-    lastLogin: "2023-09-15",
-    parentEmail: "parent1@example.com",
-    emergencyContact: "0509876543",
-    activities: ["النادي العلمي", "كرة القدم"],
-    joinDate: "2022-08-28",
-  },
-  {
-    id: "2",
-    name: "نورة محمد",
-    studentId: "10002",
-    grade: "ثاني متوسط",
-    classroom: "٢/٣",
-    parentPhone: "0507654321",
-    status: "نشط",
-    birthDate: "2017-03-22",
-    address: "الرياض، حي الملقا",
-    attendance: 98,
-    academicPerformance: 94,
-    behaviorRating: 90,
-    lastLogin: "2023-09-14",
-    parentEmail: "parent2@example.com",
-    emergencyContact: "0501122334",
-    activities: ["الرسم", "السباحة"],
-    joinDate: "2021-08-29",
-  },
-  {
-    id: "3",
-    name: "هند خالد",
-    studentId: "10003",
-    grade: "ثالث متوسط",
-    classroom: "٣/٢",
-    parentPhone: "0551234567",
-    status: "نشط",
-    birthDate: "2016-11-10",
-    address: "الرياض، حي الياسمين",
-    attendance: 92,
-    academicPerformance: 85,
-    behaviorRating: 95,
-    lastLogin: "2023-09-13",
-    parentEmail: "parent3@example.com",
-    emergencyContact: "0552233445",
-    activities: ["القراءة", "كرة السلة"],
-    joinDate: "2020-08-30",
-  },
-  {
-    id: "4",
-    name: "ريم سعد",
-    studentId: "10004",
-    grade: "أول متوسط",
-    classroom: "١/٢",
-    parentPhone: "0561234567",
-    status: "غير نشط",
-    birthDate: "2018-09-05",
-    address: "الرياض، حي الورود",
-    attendance: 75,
-    academicPerformance: 70,
-    behaviorRating: 80,
-    lastLogin: "2023-08-20",
-    parentEmail: "parent4@example.com",
-    emergencyContact: "0563344556",
-    medicalNotes: "حساسية من بعض أنواع المكسرات",
-    activities: ["الشطرنج"],
-    joinDate: "2022-08-28",
-  },
-  {
-    id: "5",
-    name: "لمى عبدالله",
-    studentId: "10005",
-    grade: "ثاني متوسط",
-    classroom: "٢/١",
-    parentPhone: "0571234567",
-    status: "نشط",
-    birthDate: "2017-07-18",
-    address: "الرياض، حي الربيع",
-    attendance: 97,
-    academicPerformance: 91,
-    behaviorRating: 93,
-    lastLogin: "2023-09-15",
-    parentEmail: "parent5@example.com",
-    emergencyContact: "0574455667",
-    activities: ["الموسيقى", "التمثيل"],
-    joinDate: "2021-08-29",
-  },
-  {
-    id: "6",
-    name: "دانة فهد",
-    studentId: "10006",
-    grade: "ثالث متوسط",
-    classroom: "٣/١",
-    parentPhone: "0581234567",
-    status: "نشط",
-    birthDate: "2016-04-12",
-    address: "الرياض، حي العليا",
-    attendance: 99,
-    academicPerformance: 96,
-    behaviorRating: 98,
-    lastLogin: "2023-09-15",
-    parentEmail: "parent6@example.com",
-    emergencyContact: "0585566778",
-    activities: ["البرمجة", "الروبوتات"],
-    joinDate: "2020-08-30",
-  },
-  {
-    id: "7",
-    name: "غادة سلطان",
-    studentId: "10007",
-    grade: "أول متوسط",
-    classroom: "١/٣",
-    parentPhone: "0591234567",
-    status: "منقول",
-    birthDate: "2018-02-25",
-    address: "الرياض، حي الصحافة",
-    attendance: 85,
-    academicPerformance: 82,
-    behaviorRating: 88,
-    lastLogin: "2023-07-10",
-    parentEmail: "parent7@example.com",
-    emergencyContact: "0596677889",
-    activities: ["الرسم"],
-    joinDate: "2022-08-28",
-  },
-  {
-    id: "8",
-    name: "منيرة خالد",
-    studentId: "10008",
-    grade: "ثاني متوسط",
-    classroom: "٢/٢",
-    parentPhone: "0501122334",
-    status: "نشط",
-    birthDate: "2017-10-30",
-    address: "الرياض، حي النخيل",
-    attendance: 94,
-    academicPerformance: 89,
-    behaviorRating: 91,
-    lastLogin: "2023-09-14",
-    parentEmail: "parent8@example.com",
-    emergencyContact: "0507788990",
-    medicalNotes: "نظارات طبية",
-    activities: ["القراءة", "الشطرنج"],
-    joinDate: "2021-08-29",
-  },
-  {
-    id: "9",
-    name: "جواهر محمد",
-    studentId: "10009",
-    grade: "ثالث متوسط",
-    classroom: "٣/٣",
-    parentPhone: "0502233445",
-    status: "نشط",
-    birthDate: "2016-08-14",
-    address: "الرياض، حي الملز",
-    attendance: 96,
-    academicPerformance: 93,
-    behaviorRating: 94,
-    lastLogin: "2023-09-15",
-    parentEmail: "parent9@example.com",
-    emergencyContact: "0508899001",
-    activities: ["السباحة", "كرة القدم"],
-    joinDate: "2020-08-30",
-  },
-  {
-    id: "10",
-    name: "العنود سعد",
-    studentId: "10010",
-    grade: "أول متوسط",
-    classroom: "١/١",
-    parentPhone: "0503344556",
-    status: "نشط",
-    birthDate: "2018-11-20",
-    address: "الرياض، حي الروضة",
-    attendance: 93,
-    academicPerformance: 87,
-    behaviorRating: 90,
-    lastLogin: "2023-09-13",
-    parentEmail: "parent10@example.com",
-    emergencyContact: "0509900112",
-    activities: ["الرسم", "الموسيقى"],
-    joinDate: "2022-08-28",
-  },
-]
-
-// قائمة الصفوف الدراسية
-const grades = ["أول متوسط", "ثاني متوسط", "ثالث متوسط"]
-
-// قائمة الفصول
-const classrooms = [
-  "١/١",
-  "١/٢",
-  "١/٣",
-  "١/٤",
-  "٢/١",
-  "٢/٢",
-  "٢/٣",
-  "٢/٤",
-  "٢/٥",
-  "٢/٦",
-  "٣/١",
-  "٣/٢",
-  "٣/٣",
-  "٣/٤",
-  "٣/٥",
-]
 
 // قائمة الأنشطة
 const activities = [
@@ -350,17 +148,7 @@ export default function StudentsPage() {
   const STUDENTS_PER_PAGE = 20
   const { toast } = useToast()
   const { userName } = useAuth()
-  const [students, setStudents] = useState<Student[]>(() => {
-    if (typeof window === "undefined") return initialStudents
-    try {
-      const saved = localStorage.getItem("studentsData")
-      if (!saved) return initialStudents
-      const parsed = JSON.parse(saved) as Student[]
-      return Array.isArray(parsed) && parsed.length > 0 ? parsed : initialStudents
-    } catch {
-      return initialStudents
-    }
-  })
+  const [students, setStudents] = useState<Student[]>(defaultStudentRoster)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterGrade, setFilterGrade] = useState<string>("")
   const [filterClassroom, setFilterClassroom] = useState<string>("")
@@ -375,6 +163,7 @@ export default function StudentsPage() {
   const [attendanceFilter, setAttendanceFilter] = useState<number | null>(null)
   const [academicFilter, setAcademicFilter] = useState<number | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
+  const [isSaving, setIsSaving] = useState(false)
 
   // حالات مربعات الحوار
   const [addDialogOpen, setAddDialogOpen] = useState(false)
@@ -384,7 +173,6 @@ export default function StudentsPage() {
   const [bulkActionDialogOpen, setBulkActionDialogOpen] = useState(false)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
   const [currentStudent, setCurrentStudent] = useState<Student | null>(null)
-  const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   // إعدادات التصدير
   const [exportFormat, setExportFormat] = useState<"csv" | "excel" | "pdf">("csv")
@@ -397,9 +185,27 @@ export default function StudentsPage() {
   const [exportOrientation, setExportOrientation] = useState<"portrait" | "landscape">("landscape")
   const exportLinkRef = useRef<HTMLAnchorElement>(null)
 
-  useEffect(() => {
-    localStorage.setItem("studentsData", JSON.stringify(students))
-  }, [students])
+  const persistStudents = async (nextStudents: Student[]) => {
+    const previousStudents = students
+    setStudents(nextStudents)
+    setIsSaving(true)
+
+    try {
+      const response = await saveStudentsData(nextStudents)
+      setStudents(mergeWithDefaultStudentRoster(response.students))
+      return true
+    } catch (error) {
+      setStudents(previousStudents)
+      toast({
+        title: "تعذر حفظ البيانات",
+        description: error instanceof Error ? error.message : "حدث خطأ أثناء حفظ بيانات الطالبات",
+        variant: "destructive",
+      })
+      return false
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   // نموذج إضافة طالبة جديدة
   const [newStudent, setNewStudent] = useState<Omit<Student, "id">>({
@@ -417,13 +223,34 @@ export default function StudentsPage() {
     activities: [],
   })
 
-  // محاكاة تحميل البيانات
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false)
-    }, 1000)
-    return () => clearTimeout(timer)
-  }, [refreshTrigger])
+    let isActive = true
+
+    void (async () => {
+      setIsLoading(true)
+      try {
+        const response = await fetchStudentsData()
+        if (!isActive) return
+        setStudents(mergeWithDefaultStudentRoster(response.students))
+      } catch (error) {
+        if (!isActive) return
+        toast({
+          title: "تعذر تحميل الطالبات",
+          description: error instanceof Error ? error.message : "تم استخدام البيانات الافتراضية مؤقتًا",
+          variant: "destructive",
+        })
+        setStudents(defaultStudentRoster)
+      } finally {
+        if (isActive) {
+          setIsLoading(false)
+        }
+      }
+    })()
+
+    return () => {
+      isActive = false
+    }
+  }, [toast])
 
   const sendWhatsAppToParent = (student: Student) => {
     const rawPhone = (student.parentPhone || "").replace(/\D/g, "")
@@ -454,11 +281,15 @@ export default function StudentsPage() {
 
   // تصفية الطالبات حسب البحث والفلاتر
   const filteredStudents = students.filter((student) => {
+    const normalizedSearchTerm = normalizeArabicText(searchTerm)
     const matchesSearch =
-      student.name.includes(searchTerm) ||
-      student.studentId.includes(searchTerm) ||
-      student.parentPhone.includes(searchTerm) ||
-      (student.parentEmail && student.parentEmail.includes(searchTerm))
+      !normalizedSearchTerm ||
+      normalizeArabicText(student.name).includes(normalizedSearchTerm) ||
+      student.studentId.includes(searchTerm.trim()) ||
+      student.parentPhone.includes(searchTerm.trim()) ||
+      student.classroom.includes(searchTerm.trim()) ||
+      student.grade.includes(searchTerm.trim()) ||
+      Boolean(student.parentEmail && student.parentEmail.toLowerCase().includes(searchTerm.trim().toLowerCase()))
 
     const matchesGrade = filterGrade ? student.grade === filterGrade : true
     const matchesClassroom = filterClassroom ? student.classroom === filterClassroom : true
@@ -524,7 +355,7 @@ export default function StudentsPage() {
   }
 
   // إضافة طالبة جديدة
-  const handleAddStudent = () => {
+  const handleAddStudent = async () => {
     if (!newStudent.name || !newStudent.studentId || !newStudent.grade || !newStudent.classroom || !newStudent.parentPhone) {
       toast({
         title: "بيانات ناقصة",
@@ -560,7 +391,8 @@ export default function StudentsPage() {
       lastLogin: new Date().toISOString().split("T")[0],
     }
 
-    setStudents([...students, studentWithId])
+    const saveSucceeded = await persistStudents([...students, studentWithId])
+    if (!saveSucceeded) return
     setAddDialogOpen(false)
     toast({
       title: "تمت الإضافة بنجاح",
@@ -586,10 +418,13 @@ export default function StudentsPage() {
   }
 
   // تعديل بيانات طالبة
-  const handleEditStudent = () => {
+  const handleEditStudent = async () => {
     if (!currentStudent) return
 
-    setStudents(students.map((student) => (student.id === currentStudent.id ? currentStudent : student)))
+    const saveSucceeded = await persistStudents(
+      students.map((student) => (student.id === currentStudent.id ? currentStudent : student)),
+    )
+    if (!saveSucceeded) return
 
     setEditDialogOpen(false)
     toast({
@@ -600,10 +435,11 @@ export default function StudentsPage() {
   }
 
   // حذف طالبة
-  const handleDeleteStudent = () => {
+  const handleDeleteStudent = async () => {
     if (!currentStudent) return
 
-    setStudents(students.filter((student) => student.id !== currentStudent.id))
+    const saveSucceeded = await persistStudents(students.filter((student) => student.id !== currentStudent.id))
+    if (!saveSucceeded) return
     setDeleteDialogOpen(false)
     toast({
       title: "تم الحذف بنجاح",
@@ -613,7 +449,7 @@ export default function StudentsPage() {
   }
 
   // تغيير حالة الطالبة (نشط/غير نشط)
-  const toggleStudentStatus = (student: Student | null) => {
+  const toggleStudentStatus = async (student: Student | null) => {
     if (!student) return
 
     const newStatus: Student["status"] = student.status === "نشط" ? "غير نشط" : "نشط"
@@ -624,7 +460,8 @@ export default function StudentsPage() {
       return s
     })
 
-    setStudents(updatedStudents)
+    const saveSucceeded = await persistStudents(updatedStudents)
+    if (!saveSucceeded) return
 
     toast({
       title: "تم تغيير الحالة بنجاح",
@@ -652,7 +489,7 @@ export default function StudentsPage() {
   }
 
   // إجراء على الطالبات المحددة
-  const handleBulkAction = (action: "activate" | "deactivate" | "delete") => {
+  const handleBulkAction = async (action: "activate" | "deactivate" | "delete") => {
     if (selectedStudents.length === 0) return
 
     let updatedStudents = [...students]
@@ -675,7 +512,8 @@ export default function StudentsPage() {
         action === "activate" ? "تم تنشيط الطالبات المحددة بنجاح" : "تم إلغاء تنشيط الطالبات المحددة بنجاح"
     }
 
-    setStudents(updatedStudents)
+    const saveSucceeded = await persistStudents(updatedStudents)
+    if (!saveSucceeded) return
     setSelectedStudents([])
     setBulkActionDialogOpen(false)
 
@@ -700,13 +538,25 @@ export default function StudentsPage() {
 
   // تحديث البيانات
   const refreshData = () => {
-    setIsLoading(true)
-    setRefreshTrigger((prev) => prev + 1)
-
-    toast({
-      title: "جاري تحديث البيانات",
-      description: "يتم تحديث بيانات الطالبات...",
-    })
+    void (async () => {
+      setIsLoading(true)
+      try {
+        const response = await fetchStudentsData()
+        setStudents(mergeWithDefaultStudentRoster(response.students))
+        toast({
+          title: "تم تحديث البيانات",
+          description: "تم تحميل أحدث بيانات الطالبات بنجاح",
+        })
+      } catch (error) {
+        toast({
+          title: "تعذر تحديث البيانات",
+          description: error instanceof Error ? error.message : "حدث خطأ أثناء تحديث بيانات الطالبات",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    })()
   }
 
   // إحصائيات الطالبات
@@ -998,6 +848,21 @@ export default function StudentsPage() {
               </CardDescription>
             </div>
             <div className="flex gap-2">
+              <div className="relative min-w-[240px]">
+                <Search className="absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="بحث سريع: الاسم أو الرقم أو الفصل"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pr-8"
+                />
+              </div>
+              {searchTerm && (
+                <Button variant="ghost" size="sm" onClick={() => setSearchTerm("")}>
+                  <X className="h-4 w-4 ml-1" />
+                  مسح
+                </Button>
+              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="flex items-center gap-1">
@@ -1048,27 +913,33 @@ export default function StudentsPage() {
               </Button>
 
               {selectedStudents.length > 0 && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      إجراءات ({selectedStudents.length})
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>إجراءات متعددة</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => handleBulkAction("activate")}>
-                      تنشيط الطالبات المحددة
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleBulkAction("deactivate")}>
-                      إلغاء تنشيط الطالبات المحددة
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => setBulkActionDialogOpen(true)} className="text-red-500">
-                      حذف الطالبات المحددة
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        إجراءات ({selectedStudents.length})
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>إجراءات متعددة</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => handleBulkAction("activate")}>
+                        تنشيط الطالبات المحددة
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleBulkAction("deactivate")}>
+                        إلغاء تنشيط الطالبات المحددة
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => setBulkActionDialogOpen(true)} className="text-red-500">
+                        حذف الطالبات المحددة
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <Button variant="destructive" size="sm" onClick={() => setBulkActionDialogOpen(true)}>
+                    <Trash2 className="h-4 w-4 ml-1" />
+                    حذف المحدد
+                  </Button>
+                </>
               )}
             </div>
           </div>

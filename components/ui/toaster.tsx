@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef } from "react"
 import { useToast } from '@/hooks/use-toast'
 import {
   Toast,
@@ -9,9 +10,34 @@ import {
   ToastTitle,
   ToastViewport,
 } from '@/components/ui/toast'
+import { playGentleNotificationTone, unlockNotificationAudio } from "@/lib/notification-sound"
 
 export function Toaster() {
   const { toasts } = useToast()
+  const latestToastIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    const unlockAudio = () => {
+      void unlockNotificationAudio()
+    }
+
+    window.addEventListener("pointerdown", unlockAudio, { passive: true })
+    window.addEventListener("keydown", unlockAudio)
+
+    return () => {
+      window.removeEventListener("pointerdown", unlockAudio)
+      window.removeEventListener("keydown", unlockAudio)
+    }
+  }, [])
+
+  useEffect(() => {
+    const latestToast = toasts[0]
+    if (!latestToast) return
+    if (latestToast.id === latestToastIdRef.current) return
+
+    latestToastIdRef.current = latestToast.id
+    void playGentleNotificationTone()
+  }, [toasts])
 
   return (
     <ToastProvider>

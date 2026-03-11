@@ -19,6 +19,10 @@ yarn-error.log*
 # env files
 .env*
 
+# runtime data
+/data/*.json
+!/data/.gitkeep
+
 # vercel
 .vercel
 

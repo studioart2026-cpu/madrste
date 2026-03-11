@@ -59,6 +59,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { fetchTeachersData, saveTeachersData } from "@/lib/school-api"
+import { teacherDirectory } from "@/lib/teachers-directory"
 
 // نموذج بيانات المعلمة
 interface Teacher {
@@ -85,161 +87,7 @@ interface Teacher {
 }
 
 // بيانات تجريبية للمعلمات
-const initialTeachers: Teacher[] = [
-  {
-    id: "1",
-    name: "نورة الأحمد",
-    teacherId: "T10001",
-    specialization: "رياضيات",
-    department: "قسم الرياضيات",
-    phone: "0501234567",
-    status: "نشط",
-    birthDate: "1985-05-15",
-    address: "الرياض، حي النزهة",
-    attendance: 98,
-    performance: 92,
-    lastLogin: "2023-09-15",
-    email: "noura@example.com",
-    emergencyContact: "0509876543",
-    classes: ["الصف الأول", "الصف الثاني"],
-    subjects: ["رياضيات أساسية", "جبر"],
-    joinDate: "2018-08-28",
-  },
-  {
-    id: "2",
-    name: "سارة المحمد",
-    teacherId: "T10002",
-    specialization: "علوم",
-    department: "قسم العلوم",
-    phone: "0507654321",
-    status: "نشط",
-    birthDate: "1987-03-22",
-    address: "الرياض، حي الملقا",
-    attendance: 95,
-    performance: 90,
-    lastLogin: "2023-09-14",
-    email: "sarah@example.com",
-    emergencyContact: "0501122334",
-    classes: ["الصف الثاني", "الصف الثالث"],
-    subjects: ["أحياء", "كيمياء"],
-    joinDate: "2019-08-29",
-  },
-  {
-    id: "3",
-    name: "منى العبدالله",
-    teacherId: "T10003",
-    specialization: "لغة عربية",
-    department: "قسم اللغة العربية",
-    phone: "0551234567",
-    status: "نشط",
-    birthDate: "1982-11-10",
-    address: "الرياض، حي الياسمين",
-    attendance: 97,
-    performance: 95,
-    lastLogin: "2023-09-13",
-    email: "mona@example.com",
-    emergencyContact: "0552233445",
-    classes: ["الصف الأول", "الصف الثالث"],
-    subjects: ["نحو", "أدب عربي"],
-    joinDate: "2017-08-30",
-  },
-  {
-    id: "4",
-    name: "هند السعد",
-    teacherId: "T10004",
-    specialization: "لغة إنجليزية",
-    department: "قسم اللغة الإنجليزية",
-    phone: "0561234567",
-    status: "غير نشط",
-    birthDate: "1988-09-05",
-    address: "الرياض، حي الورود",
-    attendance: 75,
-    performance: 80,
-    lastLogin: "2023-08-20",
-    email: "hind@example.com",
-    emergencyContact: "0563344556",
-    medicalNotes: "إجازة مرضية",
-    classes: ["الصف الثاني"],
-    subjects: ["قواعد اللغة الإنجليزية"],
-    joinDate: "2020-08-28",
-  },
-  {
-    id: "5",
-    name: "عبير الخالد",
-    teacherId: "T10005",
-    specialization: "تربية إسلامية",
-    department: "قسم التربية الإسلامية",
-    phone: "0571234567",
-    status: "نشط",
-    birthDate: "1980-07-18",
-    address: "الرياض، حي الربيع",
-    attendance: 99,
-    performance: 93,
-    lastLogin: "2023-09-15",
-    email: "abeer@example.com",
-    emergencyContact: "0574455667",
-    classes: ["الصف الأول", "الصف الثاني", "الصف الثالث"],
-    subjects: ["قرآن", "توحيد"],
-    joinDate: "2016-08-29",
-  },
-  {
-    id: "6",
-    name: "ريم الفهد",
-    teacherId: "T10006",
-    specialization: "حاسب آلي",
-    department: "قسم الحاسب",
-    phone: "0581234567",
-    status: "نشط",
-    birthDate: "1990-04-12",
-    address: "الرياض، حي العليا",
-    attendance: 96,
-    performance: 98,
-    lastLogin: "2023-09-15",
-    email: "reem@example.com",
-    emergencyContact: "0585566778",
-    classes: ["الصف الثاني", "الصف الثالث"],
-    subjects: ["برمجة", "تقنية معلومات"],
-    joinDate: "2021-08-30",
-  },
-  {
-    id: "7",
-    name: "لمياء السلطان",
-    teacherId: "T10007",
-    specialization: "اجتماعيات",
-    department: "قسم الاجتماعيات",
-    phone: "0591234567",
-    status: "إجازة",
-    birthDate: "1983-02-25",
-    address: "الرياض، حي الصحافة",
-    attendance: 85,
-    performance: 88,
-    lastLogin: "2023-07-10",
-    email: "lamia@example.com",
-    emergencyContact: "0596677889",
-    classes: ["الصف الأول"],
-    subjects: ["تاريخ", "جغرافيا"],
-    joinDate: "2019-08-28",
-  },
-  {
-    id: "8",
-    name: "أمل الناصر",
-    teacherId: "T10008",
-    specialization: "فنية",
-    department: "قسم التربية الفنية",
-    phone: "0501122334",
-    status: "نشط",
-    birthDate: "1986-10-30",
-    address: "الرياض، حي النخيل",
-    attendance: 94,
-    performance: 91,
-    lastLogin: "2023-09-14",
-    email: "amal@example.com",
-    emergencyContact: "0507788990",
-    classes: ["الصف الأول", "الصف الثاني", "الصف الثالث"],
-    subjects: ["رسم", "أشغال يدوية"],
-    joinDate: "2018-08-29",
-  },
-]
+const initialTeachers: Teacher[] = teacherDirectory
 
 // قائمة التخصصات
 const specializations = [
@@ -292,12 +140,9 @@ const subjects = [
   "أشغال يدوية",
 ]
 
-const TEACHERS_STORAGE_KEY = "teachersData"
-
 export default function TeachersPage() {
   const { toast } = useToast()
   const [teachers, setTeachers] = useState<Teacher[]>(initialTeachers)
-  const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterSpecialization, setFilterSpecialization] = useState<string>("")
   const [filterDepartment, setFilterDepartment] = useState<string>("")
@@ -319,7 +164,7 @@ export default function TeachersPage() {
   const [viewDialogOpen, setViewDialogOpen] = useState(false)
   const [bulkActionDialogOpen, setBulkActionDialogOpen] = useState(false)
   const [currentTeacher, setCurrentTeacher] = useState<Teacher | null>(null)
-  const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [isSaving, setIsSaving] = useState(false)
 
   // نموذج إضافة معلمة جديدة
   const [newTeacher, setNewTeacher] = useState<Omit<Teacher, "id">>({
@@ -337,36 +182,60 @@ export default function TeachersPage() {
     subjects: [],
   })
 
-  // تحميل بيانات المعلمات من localStorage عند فتح الصفحة
-  useEffect(() => {
+  const loadTeachers = async (showSuccessToast = false) => {
+    setIsLoading(true)
+
     try {
-      const savedTeachers = localStorage.getItem(TEACHERS_STORAGE_KEY)
-      if (savedTeachers) {
-        const parsedTeachers = JSON.parse(savedTeachers)
-        if (Array.isArray(parsedTeachers)) {
-          setTeachers(parsedTeachers)
-        }
+      const response = await fetchTeachersData()
+      const nextTeachers = Array.isArray(response.teachers) && response.teachers.length > 0 ? response.teachers : initialTeachers
+      setTeachers(nextTeachers)
+
+      if (showSuccessToast) {
+        toast({
+          title: "تم تحديث البيانات",
+          description: "تم تحميل أحدث بيانات المعلمات",
+        })
       }
     } catch (error) {
-      console.error("فشل تحميل بيانات المعلمات من التخزين المحلي:", error)
+      setTeachers(initialTeachers)
+
+      if (showSuccessToast) {
+        toast({
+          title: "تعذر تحديث البيانات",
+          description: error instanceof Error ? error.message : "حدث خطأ أثناء تحميل بيانات المعلمات",
+          variant: "destructive",
+        })
+      }
     } finally {
-      setHasLoadedFromStorage(true)
-    }
-  }, [])
-
-  // حفظ بيانات المعلمات تلقائياً بعد أي تعديل
-  useEffect(() => {
-    if (!hasLoadedFromStorage) return
-    localStorage.setItem(TEACHERS_STORAGE_KEY, JSON.stringify(teachers))
-  }, [teachers, hasLoadedFromStorage])
-
-  // محاكاة تحميل البيانات
-  useEffect(() => {
-    const timer = setTimeout(() => {
       setIsLoading(false)
-    }, 1000)
-    return () => clearTimeout(timer)
-  }, [refreshTrigger])
+    }
+  }
+
+  const persistTeachers = async (nextTeachers: Teacher[]) => {
+    const previousTeachers = teachers
+    setTeachers(nextTeachers)
+    setIsSaving(true)
+
+    try {
+      const response = await saveTeachersData(nextTeachers)
+      setTeachers(response.teachers)
+      return true
+    } catch (error) {
+      setTeachers(previousTeachers)
+      toast({
+        title: "تعذر حفظ بيانات المعلمات",
+        description: error instanceof Error ? error.message : "حدث خطأ أثناء حفظ بيانات المعلمات",
+        variant: "destructive",
+      })
+      return false
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadTeachers(false)
+  }, [])
 
   // تصفية المعلمات حسب البحث والفلاتر
   const filteredTeachers = teachers.filter((teacher) => {
@@ -422,7 +291,7 @@ export default function TeachersPage() {
   }
 
   // إضافة معلمة جديدة
-  const handleAddTeacher = () => {
+  const handleAddTeacher = async () => {
     const maxId = teachers.length > 0 ? Math.max(...teachers.map((t) => Number.parseInt(t.id, 10) || 0)) : 0
     const newId = (maxId + 1).toString()
     const teacherWithId = {
@@ -432,7 +301,11 @@ export default function TeachersPage() {
       lastLogin: new Date().toISOString().split("T")[0],
     }
 
-    setTeachers([...teachers, teacherWithId])
+    const saved = await persistTeachers([...teachers, teacherWithId])
+    if (!saved) {
+      return
+    }
+
     setAddDialogOpen(false)
     toast({
       title: "تمت الإضافة بنجاح",
@@ -458,10 +331,13 @@ export default function TeachersPage() {
   }
 
   // تعديل بيانات معلمة
-  const handleEditTeacher = () => {
+  const handleEditTeacher = async () => {
     if (!currentTeacher) return
 
-    setTeachers(teachers.map((teacher) => (teacher.id === currentTeacher.id ? currentTeacher : teacher)))
+    const saved = await persistTeachers(teachers.map((teacher) => (teacher.id === currentTeacher.id ? currentTeacher : teacher)))
+    if (!saved) {
+      return
+    }
 
     setEditDialogOpen(false)
     toast({
@@ -472,10 +348,14 @@ export default function TeachersPage() {
   }
 
   // حذف معلمة
-  const handleDeleteTeacher = () => {
+  const handleDeleteTeacher = async () => {
     if (!currentTeacher) return
 
-    setTeachers(teachers.filter((teacher) => teacher.id !== currentTeacher.id))
+    const saved = await persistTeachers(teachers.filter((teacher) => teacher.id !== currentTeacher.id))
+    if (!saved) {
+      return
+    }
+
     setDeleteDialogOpen(false)
     toast({
       title: "تم الحذف بنجاح",
@@ -485,7 +365,7 @@ export default function TeachersPage() {
   }
 
   // تغيير حالة المعلمة (نشط/غير نشط)
-  const toggleTeacherStatus = (teacher: Teacher | null) => {
+  const toggleTeacherStatus = async (teacher: Teacher | null) => {
     if (!teacher) return
 
     const newStatus: Teacher["status"] = teacher.status === "نشط" ? "غير نشط" : "نشط"
@@ -496,7 +376,10 @@ export default function TeachersPage() {
       return t
     })
 
-    setTeachers(updatedTeachers)
+    const saved = await persistTeachers(updatedTeachers)
+    if (!saved) {
+      return
+    }
 
     toast({
       title: "تم تغيير الحالة بنجاح",
@@ -524,7 +407,7 @@ export default function TeachersPage() {
   }
 
   // إجراء على المعلمات المحددة
-  const handleBulkAction = (action: "activate" | "deactivate" | "delete") => {
+  const handleBulkAction = async (action: "activate" | "deactivate" | "delete") => {
     if (selectedTeachers.length === 0) return
 
     let updatedTeachers = [...teachers]
@@ -547,7 +430,11 @@ export default function TeachersPage() {
         action === "activate" ? "تم تنشيط المعلمات المحددة بنجاح" : "تم إلغاء تنشيط المعلمات المحددة بنجاح"
     }
 
-    setTeachers(updatedTeachers)
+    const saved = await persistTeachers(updatedTeachers)
+    if (!saved) {
+      return
+    }
+
     setSelectedTeachers([])
     setBulkActionDialogOpen(false)
 
@@ -572,13 +459,7 @@ export default function TeachersPage() {
 
   // تحديث البيانات
   const refreshData = () => {
-    setIsLoading(true)
-    setRefreshTrigger((prev) => prev + 1)
-
-    toast({
-      title: "جاري تحديث البيانات",
-      description: "يتم تحديث بيانات المعلمات...",
-    })
+    void loadTeachers(true)
   }
 
   // إحصائيات المعلمات
@@ -587,12 +468,12 @@ export default function TeachersPage() {
     active: teachers.filter((t) => t.status === "نشط").length,
     inactive: teachers.filter((t) => t.status === "غير نشط").length,
     onLeave: teachers.filter((t) => t.status === "إجازة").length,
-    averageAttendance: Math.round(
-      teachers.reduce((sum, teacher) => sum + (teacher.attendance || 0), 0) / teachers.length,
-    ),
-    averagePerformance: Math.round(
-      teachers.reduce((sum, teacher) => sum + (teacher.performance || 0), 0) / teachers.length,
-    ),
+    averageAttendance: teachers.length
+      ? Math.round(teachers.reduce((sum, teacher) => sum + (teacher.attendance || 0), 0) / teachers.length)
+      : 0,
+    averagePerformance: teachers.length
+      ? Math.round(teachers.reduce((sum, teacher) => sum + (teacher.performance || 0), 0) / teachers.length)
+      : 0,
   }
 
   // تحديد لون البطاقة حسب الحالة
@@ -643,7 +524,7 @@ export default function TeachersPage() {
               <UserPlus className="h-4 w-4" />
               <span>إضافة معلمة</span>
             </Button>
-            <Button variant="outline" onClick={refreshData} className="flex items-center gap-2">
+            <Button variant="outline" onClick={refreshData} className="flex items-center gap-2" disabled={isLoading || isSaving}>
               <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
               <span>تحديث</span>
             </Button>
@@ -686,7 +567,7 @@ export default function TeachersPage() {
           <CardContent>
             <div className="text-3xl font-bold">{teacherStats.active}</div>
             <p className="text-sm text-muted-foreground mt-1">
-              نسبة {Math.round((teacherStats.active / teacherStats.total) * 100)}% من الإجمالي
+              نسبة {teacherStats.total ? Math.round((teacherStats.active / teacherStats.total) * 100) : 0}% من الإجمالي
             </p>
           </CardContent>
         </Card>
@@ -704,7 +585,7 @@ export default function TeachersPage() {
           <CardContent>
             <div className="text-3xl font-bold">{teacherStats.inactive}</div>
             <p className="text-sm text-muted-foreground mt-1">
-              نسبة {Math.round((teacherStats.inactive / teacherStats.total) * 100)}% من الإجمالي
+              نسبة {teacherStats.total ? Math.round((teacherStats.inactive / teacherStats.total) * 100) : 0}% من الإجمالي
             </p>
           </CardContent>
         </Card>
@@ -790,10 +671,10 @@ export default function TeachersPage() {
                   <DropdownMenuContent align="end">
                     <DropdownMenuLabel>إجراءات متعددة</DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => handleBulkAction("activate")}>
+                    <DropdownMenuItem onClick={() => void handleBulkAction("activate")}>
                       تنشيط المعلمات المحددة
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleBulkAction("deactivate")}>
+                    <DropdownMenuItem onClick={() => void handleBulkAction("deactivate")}>
                       إلغاء تنشيط المعلمات المحددة
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
@@ -1629,7 +1510,7 @@ export default function TeachersPage() {
             <Button variant="outline" onClick={() => setAddDialogOpen(false)}>
               إلغاء
             </Button>
-            <Button onClick={handleAddTeacher} className="bg-[#0a8a74] hover:bg-[#097a67]">
+            <Button onClick={() => void handleAddTeacher()} className="bg-[#0a8a74] hover:bg-[#097a67]" disabled={isSaving}>
               إضافة المعلمة
             </Button>
           </DialogFooter>
@@ -1770,7 +1651,7 @@ export default function TeachersPage() {
             <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
               إلغاء
             </Button>
-            <Button onClick={handleEditTeacher} className="bg-[#0a8a74] hover:bg-[#097a67]">
+            <Button onClick={() => void handleEditTeacher()} className="bg-[#0a8a74] hover:bg-[#097a67]" disabled={isSaving}>
               حفظ التغييرات
             </Button>
           </DialogFooter>
@@ -1788,7 +1669,7 @@ export default function TeachersPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteTeacher} className="bg-destructive text-destructive-foreground">
+            <AlertDialogAction onClick={() => void handleDeleteTeacher()} className="bg-destructive text-destructive-foreground">
               حذف
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -1989,7 +1870,7 @@ export default function TeachersPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => handleBulkAction("delete")}
+              onClick={() => void handleBulkAction("delete")}
               className="bg-destructive text-destructive-foreground"
             >
               حذف

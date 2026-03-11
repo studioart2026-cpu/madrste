@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -19,17 +19,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { CheckCircle, XCircle, UserCheck, UserX, Eye, RefreshCw } from "lucide-react"
-import { registrationStore, type RegistrationRequest } from "@/lib/registration-store"
-import { usersStore } from "@/lib/users-store"
+import { CheckCircle, Eye, RefreshCw, UserCheck, UserX, XCircle } from "lucide-react"
+import type { RegistrationRequest } from "@/lib/auth-types"
+import { fetchStudents, saveStudents } from "@/lib/school-api"
+import type { ManagedStudent } from "@/lib/student-roster"
 
-const addApprovedStudentToDirectory = (request: RegistrationRequest) => {
+const addApprovedStudentToDirectory = async (request: RegistrationRequest) => {
   if (request.userType !== "student") return
 
   try {
-    const raw = localStorage.getItem("studentsData")
-    const existing = raw ? (JSON.parse(raw) as Array<Record<string, unknown>>) : []
-    const students = Array.isArray(existing) ? existing : []
+    const response = await fetchStudents()
+    const students = Array.isArray(response.students) ? response.students : []
 
     const normalizedName = request.name.trim()
     const normalizedPhone = (request.phoneNumber || "").replace(/\D/g, "")
@@ -73,17 +73,17 @@ const addApprovedStudentToDirectory = (request: RegistrationRequest) => {
       lastLogin: new Date().toISOString().split("T")[0],
       activities: [],
       notes: "تمت إضافتها تلقائيًا بعد الموافقة على التسجيل",
-    })
+    } satisfies ManagedStudent)
 
-    localStorage.setItem("studentsData", JSON.stringify(students))
+    await saveStudents(students)
   } catch {
-    // ignore local storage failures
+    // ignore sync failures here and allow approval flow to continue
   }
 }
 
 export default function UserApprovalsPage() {
   const { toast } = useToast()
-  const { userType, approveUser, rejectUser } = useAuth()
+  const { userType, approveUser, rejectUser, isReady, isApproved } = useAuth()
   const [requests, setRequests] = useState<RegistrationRequest[]>([])
   const [currentRequest, setCurrentRequest] = useState<RegistrationRequest | null>(null)
   const [viewDialogOpen, setViewDialogOpen] = useState(false)
@@ -91,134 +91,100 @@ export default function UserApprovalsPage() {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
-  // جلب طلبات التسجيل من المخزن
-  useEffect(() => {
-    // جلب الطلبات الأولية
-    setRequests(registrationStore.getRequests())
-
-    // الاشتراك في التحديثات
-    const unsubscribe = registrationStore.subscribe(() => {
-      setRequests(registrationStore.getRequests())
-    })
-
-    return () => {
-      unsubscribe()
+  const loadRequests = async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) {
+      setIsLoading(true)
     }
-  }, [])
 
-  // تعديل وظيفة refreshRequests لتحسين تحديث قائمة الطلبات
-  const refreshRequests = () => {
-    setIsLoading(true)
-
-    // محاكاة تأخير الشبكة
-    setTimeout(() => {
-      // الحصول على أحدث الطلبات من المخزن
-      const updatedRequests = registrationStore.getRequests()
-      console.log("الطلبات المحدثة:", updatedRequests)
-
-      setRequests([...updatedRequests]) // استخدام نسخة جديدة من المصفوفة لضمان إعادة العرض
-      setIsLoading(false)
-
-      toast({
-        title: "تم تحديث الطلبات",
-        description: "تم تحديث قائمة طلبات التسجيل بنجاح",
+    try {
+      const response = await fetch("/api/admin/registration-requests", {
+        method: "GET",
+        credentials: "same-origin",
+        cache: "no-store",
       })
-    }, 500)
+
+      const data = (await response.json()) as { requests?: RegistrationRequest[]; error?: string }
+      if (!response.ok || !data.requests) {
+        throw new Error(data.error || "تعذر تحميل طلبات التسجيل")
+      }
+
+      setRequests(data.requests)
+
+      if (!silent) {
+        toast({
+          title: "تم تحديث الطلبات",
+          description: "تم تحميل أحدث طلبات التسجيل بنجاح",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "تعذر تحميل البيانات",
+        description: error instanceof Error ? error.message : "حدث خطأ أثناء تحميل الطلبات",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  // التحقق من صلاحيات المستخدم
-  if (userType !== "admin") {
+  useEffect(() => {
+    if (!isReady || userType !== "admin" || !isApproved) {
+      return
+    }
+
+    void loadRequests({ silent: true })
+  }, [isApproved, isReady, userType])
+
+  if (!isReady) {
+    return <div className="py-12 text-center text-muted-foreground">جارٍ تحميل صلاحيات المستخدم...</div>
+  }
+
+  if (userType !== "admin" || !isApproved) {
     return (
-      <div className="flex flex-col items-center justify-center h-[70vh]">
-        <h1 className="text-2xl font-bold text-red-600 mb-4">غير مصرح بالوصول</h1>
+      <div className="flex h-[70vh] flex-col items-center justify-center">
+        <h1 className="mb-4 text-2xl font-bold text-red-600">غير مصرح بالوصول</h1>
         <p className="text-gray-600">ليس لديك صلاحية للوصول إلى هذه الصفحة</p>
       </div>
     )
   }
 
-  // الموافقة على طلب التسجيل
-  const handleApproveRequest = () => {
+  const handleApproveRequest = async () => {
     if (!currentRequest) return
 
     try {
-      // تحديث حالة الطلب في مخزن الطلبات
-      const updateSuccess = registrationStore.updateRequestStatus(currentRequest.id, "approved")
-
-      if (!updateSuccess) {
-        throw new Error("فشل تحديث حالة الطلب")
-      }
-
-      // البحث عن المستخدم في مخزن المستخدمين
-      const user = usersStore.getUserByEmail(currentRequest.email)
-
-      if (user) {
-        // تحديث حالة المستخدم إلى معتمد
-        usersStore.approveUser(currentRequest.email)
-      } else {
-        // إذا لم يكن المستخدم موجوداً في المخزن، أضفه
-        usersStore.addUser({
-          name: currentRequest.name,
-          email: currentRequest.email,
-          password: "password123", // كلمة مرور افتراضية
-          userType: currentRequest.userType,
-          phoneNumber: currentRequest.phoneNumber,
-          isApproved: true,
-        })
-      }
-
-      // استدعاء وظيفة الموافقة من مزود المصادقة
-      approveUser(currentRequest.email)
-      addApprovedStudentToDirectory(currentRequest)
-
-      // إغلاق مربع الحوار وعرض رسالة نجاح
+      await approveUser(currentRequest.id)
+      await addApprovedStudentToDirectory(currentRequest)
       setApproveDialogOpen(false)
       toast({
         title: "تمت الموافقة بنجاح",
         description: `تمت الموافقة على حساب ${currentRequest.name}`,
-        variant: "default",
       })
-
-      // تحديث قائمة الطلبات
-      refreshRequests()
+      await loadRequests({ silent: true })
     } catch (error) {
-      console.error("Error approving user:", error)
       toast({
         title: "حدث خطأ",
-        description: "حدث خطأ أثناء الموافقة على الطلب",
+        description: error instanceof Error ? error.message : "تعذر الموافقة على الطلب",
         variant: "destructive",
       })
     }
   }
 
-  // رفض طلب التسجيل
-  const handleRejectRequest = () => {
+  const handleRejectRequest = async () => {
     if (!currentRequest) return
 
     try {
-      // تحديث حالة الطلب في مخزن الطلبات
-      registrationStore.updateRequestStatus(currentRequest.id, "rejected")
-
-      // حذف المستخدم من مخزن المستخدمين إذا كان موجوداً
-      usersStore.deleteUser(currentRequest.email)
-
-      // استدعاء وظيفة الرفض من مزود المصادقة
-      rejectUser(currentRequest.email)
-
-      // إغلاق مربع الحوار وعرض رسالة نجاح
+      await rejectUser(currentRequest.id)
       setRejectDialogOpen(false)
       toast({
         title: "تم الرفض",
         description: `تم رفض حساب ${currentRequest.name}`,
         variant: "destructive",
       })
-
-      // تحديث قائمة الطلبات
-      setRequests(registrationStore.getRequests())
+      await loadRequests({ silent: true })
     } catch (error) {
-      console.error("Error rejecting user:", error)
       toast({
         title: "حدث خطأ",
-        description: "حدث خطأ أثناء رفض الطلب",
+        description: error instanceof Error ? error.message : "تعذر رفض الطلب",
         variant: "destructive",
       })
     }
@@ -226,13 +192,13 @@ export default function UserApprovalsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">إدارة طلبات التسجيل</h1>
-          <p className="text-gray-500 mt-1">الموافقة على طلبات التسجيل الجديدة ورفضها</p>
+          <p className="mt-1 text-gray-500">الموافقة على طلبات التسجيل الجديدة ورفضها</p>
         </div>
         <Button
-          onClick={refreshRequests}
+          onClick={() => void loadRequests()}
           variant="outline"
           className="flex items-center gap-2 border-[#0a8a74] text-[#0a8a74]"
           disabled={isLoading}
@@ -305,7 +271,6 @@ export default function UserApprovalsPage() {
         </CardContent>
       </Card>
 
-      {/* مربع حوار عرض تفاصيل الطلب */}
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -345,7 +310,7 @@ export default function UserApprovalsPage() {
               </div>
 
               {currentRequest.status === "pending" && (
-                <div className="flex gap-2 justify-end">
+                <div className="flex justify-end gap-2">
                   <Button
                     variant="outline"
                     className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
@@ -374,7 +339,6 @@ export default function UserApprovalsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* مربع حوار تأكيد الموافقة */}
       <AlertDialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -386,14 +350,13 @@ export default function UserApprovalsPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={handleApproveRequest} className="bg-[#0a8a74]">
+            <AlertDialogAction onClick={() => void handleApproveRequest()} className="bg-[#0a8a74]">
               تأكيد الموافقة
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* مربع حوار تأكيد الرفض */}
       <AlertDialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -404,7 +367,10 @@ export default function UserApprovalsPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRejectRequest} className="bg-destructive text-destructive-foreground">
+            <AlertDialogAction
+              onClick={() => void handleRejectRequest()}
+              className="bg-destructive text-destructive-foreground"
+            >
               تأكيد الرفض
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -414,7 +380,6 @@ export default function UserApprovalsPage() {
   )
 }
 
-// مكون جدول طلبات التسجيل
 function RequestsTable({
   requests,
   setCurrentRequest,
@@ -473,7 +438,7 @@ function RequestsTable({
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                          className="text-green-600 hover:bg-green-50 hover:text-green-700"
                           onClick={() => {
                             setCurrentRequest(request)
                             setApproveDialogOpen(true)
@@ -485,7 +450,7 @@ function RequestsTable({
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          className="text-red-600 hover:bg-red-50 hover:text-red-700"
                           onClick={() => {
                             setCurrentRequest(request)
                             setRejectDialogOpen(true)
@@ -502,7 +467,7 @@ function RequestsTable({
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+              <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                 لا توجد طلبات تسجيل
               </TableCell>
             </TableRow>
@@ -513,25 +478,26 @@ function RequestsTable({
   )
 }
 
-// مكون شارة الحالة
 function StatusBadge({ status }: { status: RegistrationRequest["status"] }) {
   if (status === "pending") {
     return (
-      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
         في الانتظار
       </Badge>
     )
-  } else if (status === "approved") {
+  }
+
+  if (status === "approved") {
     return (
-      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+      <Badge variant="outline" className="border-green-200 bg-green-50 text-green-700">
         تمت الموافقة
       </Badge>
     )
-  } else {
-    return (
-      <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-        مرفوض
-      </Badge>
-    )
   }
+
+  return (
+    <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">
+      مرفوض
+    </Badge>
+  )
 }

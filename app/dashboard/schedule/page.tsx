@@ -17,154 +17,19 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Clock, Download, Filter, Printer, RefreshCw, Save, Search, Plus } from "lucide-react"
+import { Clock, Filter, Printer, RefreshCw, Save, Search, Plus } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/components/auth-provider"
-
-// تعريف أنواع البيانات
-type Period = {
-  id: number
-  time: string
-  subject: string
-  teacher: string
-  room: string
-}
-
-type DaySchedule = {
-  id: number
-  day: string
-  periods: Period[]
-}
-
-type PeriodSlot = {
-  id: number
-  name: string
-  start: string
-  end: string
-}
-
-// بيانات الجدول الافتراضية
-const defaultScheduleData: DaySchedule[] = [
-  {
-    id: 1,
-    day: "الأحد",
-    periods: [
-      { id: 1, time: "08:00 - 08:45", subject: "الرياضيات", teacher: "أ. محمد أحمد", room: "101" },
-      { id: 2, time: "08:50 - 09:35", subject: "اللغة العربية", teacher: "أ. سارة خالد", room: "102" },
-      { id: 3, time: "09:40 - 10:25", subject: "العلوم", teacher: "أ. أحمد محمود", room: "103" },
-      { id: 4, time: "10:30 - 11:15", subject: "استراحة", teacher: "", room: "" },
-      { id: 5, time: "11:20 - 12:05", subject: "اللغة الإنجليزية", teacher: "أ. فاطمة علي", room: "104" },
-      { id: 6, time: "12:10 - 12:55", subject: "التربية الإسلامية", teacher: "أ. عبدالله محمد", room: "105" },
-      { id: 7, time: "13:00 - 13:45", subject: "الاجتماعيات", teacher: "أ. نورة سعيد", room: "106" },
-    ],
-  },
-  {
-    id: 2,
-    day: "الاثنين",
-    periods: [
-      { id: 1, time: "08:00 - 08:45", subject: "العلوم", teacher: "أ. أحمد محمود", room: "103" },
-      { id: 2, time: "08:50 - 09:35", subject: "الرياضيات", teacher: "أ. محمد أحمد", room: "101" },
-      { id: 3, time: "09:40 - 10:25", subject: "اللغة الإنجليزية", teacher: "أ. فاطمة علي", room: "104" },
-      { id: 4, time: "10:30 - 11:15", subject: "استراحة", teacher: "", room: "" },
-      { id: 5, time: "11:20 - 12:05", subject: "اللغة العربية", teacher: "أ. سارة خالد", room: "102" },
-      { id: 6, time: "12:10 - 12:55", subject: "التربية البدنية", teacher: "أ. خالد عمر", room: "ملعب" },
-      { id: 7, time: "13:00 - 13:45", subject: "الحاسوب", teacher: "أ. ليلى حسن", room: "معمل 1" },
-    ],
-  },
-  {
-    id: 3,
-    day: "الثلاثاء",
-    periods: [
-      { id: 1, time: "08:00 - 08:45", subject: "اللغة العربية", teacher: "أ. سارة خالد", room: "102" },
-      { id: 2, time: "08:50 - 09:35", subject: "الاجتماعيات", teacher: "أ. نورة سعيد", room: "106" },
-      { id: 3, time: "09:40 - 10:25", subject: "الرياضيات", teacher: "أ. محمد أحمد", room: "101" },
-      { id: 4, time: "10:30 - 11:15", subject: "استراحة", teacher: "", room: "" },
-      { id: 5, time: "11:20 - 12:05", subject: "العلوم", teacher: "أ. أحمد محمود", room: "103" },
-      { id: 6, time: "12:10 - 12:55", subject: "اللغة الإنجليزية", teacher: "أ. فاطمة علي", room: "104" },
-      { id: 7, time: "13:00 - 13:45", subject: "الفنية", teacher: "أ. سمية ناصر", room: "107" },
-    ],
-  },
-  {
-    id: 4,
-    day: "الأربعاء",
-    periods: [
-      { id: 1, time: "08:00 - 08:45", subject: "التربية الإسلامية", teacher: "أ. عبدالله محمد", room: "105" },
-      { id: 2, time: "08:50 - 09:35", subject: "العلوم", teacher: "أ. أحمد محمود", room: "103" },
-      { id: 3, time: "09:40 - 10:25", subject: "اللغة العربية", teacher: "أ. سارة خالد", room: "102" },
-      { id: 4, time: "10:30 - 11:15", subject: "استراحة", teacher: "", room: "" },
-      { id: 5, time: "11:20 - 12:05", subject: "الرياضيات", teacher: "أ. محمد أحمد", room: "101" },
-      { id: 6, time: "12:10 - 12:55", subject: "الحاسوب", teacher: "أ. ليلى حسن", room: "معمل 1" },
-      { id: 7, time: "13:00 - 13:45", subject: "اللغة الإنجليزية", teacher: "أ. فاطمة علي", room: "104" },
-    ],
-  },
-  {
-    id: 5,
-    day: "الخميس",
-    periods: [
-      { id: 1, time: "08:00 - 08:45", subject: "اللغة الإنجليزية", teacher: "أ. فاطمة علي", room: "104" },
-      { id: 2, time: "08:50 - 09:35", subject: "الرياضيات", teacher: "أ. محمد أحمد", room: "101" },
-      { id: 3, time: "09:40 - 10:25", subject: "التربية الإسلامية", teacher: "أ. عبدالله محمد", room: "105" },
-      { id: 4, time: "10:30 - 11:15", subject: "استراحة", teacher: "", room: "" },
-      { id: 5, time: "11:20 - 12:05", subject: "اللغة العربية", teacher: "أ. سارة خالد", room: "102" },
-      { id: 6, time: "12:10 - 12:55", subject: "العلوم", teacher: "أ. أحمد محمود", room: "103" },
-      { id: 7, time: "13:00 - 13:45", subject: "التربية البدنية", teacher: "أ. خالد عمر", room: "ملعب" },
-    ],
-  },
-]
-
-// بيانات الفصول
-const classes = [
-  { id: "1-1", name: "١/١" },
-  { id: "1-2", name: "١/٢" },
-  { id: "1-3", name: "١/٣" },
-  { id: "1-4", name: "١/٤" },
-  { id: "1-5", name: "١/٥" },
-  { id: "2-1", name: "٢/١" },
-  { id: "2-2", name: "٢/٢" },
-  { id: "2-3", name: "٢/٣" },
-  { id: "2-4", name: "٢/٤" },
-  { id: "2-5", name: "٢/٥" },
-  { id: "3-1", name: "٣/١" },
-  { id: "3-2", name: "٣/٢" },
-  { id: "3-3", name: "٣/٣" },
-  { id: "3-4", name: "٣/٤" },
-  { id: "3-5", name: "٣/٥" },
-]
-
-// بيانات المعلمين
-const teachers = [
-  { id: "T1", name: "أ. محمد أحمد" },
-  { id: "T2", name: "أ. سارة خالد" },
-  { id: "T3", name: "أ. أحمد محمود" },
-  { id: "T4", name: "أ. فاطمة علي" },
-  { id: "T5", name: "أ. عبدالله محمد" },
-  { id: "T6", name: "أ. نورة سعيد" },
-  { id: "T7", name: "أ. خالد عمر" },
-  { id: "T8", name: "أ. ليلى حسن" },
-  { id: "T9", name: "أ. سمية ناصر" },
-]
-
-// بيانات المواد الدراسية
-const subjects = [
-  "الرياضيات",
-  "اللغة العربية",
-  "العلوم",
-  "اللغة الإنجليزية",
-  "التربية الإسلامية",
-  "الاجتماعيات",
-  "التربية البدنية",
-  "الحاسوب",
-  "الفنية",
-]
-
-const defaultPeriodSlots: PeriodSlot[] = [
-  { id: 1, name: "الأولى", start: "08:00", end: "08:45" },
-  { id: 2, name: "الثانية", start: "08:50", end: "09:35" },
-  { id: 3, name: "الثالثة", start: "09:40", end: "10:25" },
-  { id: 5, name: "الرابعة", start: "11:20", end: "12:05" },
-  { id: 6, name: "الخامسة", start: "12:10", end: "12:55" },
-  { id: 7, name: "السادسة", start: "13:00", end: "13:45" },
-]
+import { fetchScheduleData as fetchScheduleSnapshot, saveScheduleData as saveScheduleSnapshot } from "@/lib/school-api"
+import {
+  defaultPeriodSlots,
+  defaultScheduleData,
+  scheduleClasses as classes,
+  scheduleSubjects as subjects,
+  scheduleTeachers as teachers,
+  type DaySchedule,
+  type PeriodSlot,
+} from "@/lib/school-data"
 
 export default function SchedulePage() {
   const { toast } = useToast()
@@ -181,14 +46,17 @@ export default function SchedulePage() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
   const [scheduleData, setScheduleData] = useState<DaySchedule[]>(defaultScheduleData)
   const [periodSlots, setPeriodSlots] = useState<PeriodSlot[]>(defaultPeriodSlots)
+  const [isSyncing, setIsSyncing] = useState(false)
 
-  // حالات مربع حوار إضافة حصة
   const [isAddEventOpen, setIsAddEventOpen] = useState(false)
   const [addEventDay, setAddEventDay] = useState("الأحد")
   const [addEventPeriod, setAddEventPeriod] = useState("1")
   const [addEventSubject, setAddEventSubject] = useState("")
   const [addEventTeacher, setAddEventTeacher] = useState("")
   const [addEventRoom, setAddEventRoom] = useState("")
+  const [isTestLessonDialogOpen, setIsTestLessonDialogOpen] = useState(false)
+  const [testLessonDay, setTestLessonDay] = useState("الأحد")
+  const [testLessonPeriod, setTestLessonPeriod] = useState("1")
 
   // حالات مربع حوار تعديل حصة
   const [isEditEventOpen, setIsEditEventOpen] = useState(false)
@@ -198,6 +66,8 @@ export default function SchedulePage() {
   const [editEventTeacher, setEditEventTeacher] = useState("")
   const [editEventRoom, setEditEventRoom] = useState("")
   const printableScheduleRef = useRef<HTMLDivElement | null>(null)
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [highlightedSlot, setHighlightedSlot] = useState<{ dayIndex: number; periodIndex: number } | null>(null)
 
   const subjectColorMap: Record<string, string> = {
     الرياضيات: "#dbeafe",
@@ -229,44 +99,79 @@ export default function SchedulePage() {
       printColorAdjust: "exact",
     }) as CSSProperties
 
-  // استرجاع البيانات المحفوظة عند تحميل الصفحة
   useEffect(() => {
-    const savedSchedule = localStorage.getItem("schoolSchedule")
-    if (savedSchedule) {
-      try {
-        const parsedSchedule = JSON.parse(savedSchedule) as DaySchedule[]
-        setScheduleData(parsedSchedule)
+    let isActive = true
 
-        // مزامنة أوقات الحصص من الجدول المحفوظ
-        const sampleDay = parsedSchedule[0]
-        if (sampleDay) {
-          const syncedSlots = defaultPeriodSlots.map((slot) => {
-            const p = sampleDay.periods.find((period) => period.id === slot.id)
-            if (!p) return slot
-            const parts = p.time.split(" - ")
-            if (parts.length === 2) {
-              return { ...slot, start: parts[0].trim(), end: parts[1].trim() }
-            }
-            return slot
-          })
-          setPeriodSlots(syncedSlots)
-        }
-      } catch (e) {
-        console.error("خطأ في قراءة الجدول المحفوظ:", e)
+    void (async () => {
+      try {
+        const response = await fetchScheduleSnapshot()
+        if (!isActive) return
+        setScheduleData(response.scheduleData)
+        setPeriodSlots(response.periodSlots)
+      } catch (error) {
+        if (!isActive) return
+        toast({
+          title: "تعذر تحميل الجدول",
+          description: error instanceof Error ? error.message : "تم استخدام الجدول الافتراضي مؤقتًا",
+          variant: "destructive",
+        })
+      }
+    })()
+
+    return () => {
+      isActive = false
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimeoutRef.current) {
+        clearTimeout(highlightTimeoutRef.current)
       }
     }
   }, [])
 
-  // حفظ الجدول في التخزين المحلي
-  const saveScheduleToStorage = (schedule: DaySchedule[]) => {
-    localStorage.setItem("schoolSchedule", JSON.stringify(schedule))
-    toast({
-      title: "تم الحفظ",
-      description: "تم حفظ الجدول بنجاح",
-    })
+  const markSlotAsHighlighted = (dayIndex: number, periodIndex: number) => {
+    if (highlightTimeoutRef.current) {
+      clearTimeout(highlightTimeoutRef.current)
+    }
+
+    setHighlightedSlot({ dayIndex, periodIndex })
+    highlightTimeoutRef.current = setTimeout(() => {
+      setHighlightedSlot(null)
+      highlightTimeoutRef.current = null
+    }, 4000)
   }
 
-  const applyPeriodTimes = () => {
+  const persistSchedule = async (nextSchedule: DaySchedule[], nextPeriodSlots = periodSlots) => {
+    const previousSchedule = scheduleData
+    const previousPeriodSlots = periodSlots
+    setIsSyncing(true)
+
+    try {
+      const response = await saveScheduleSnapshot(nextSchedule, nextPeriodSlots)
+      setScheduleData(response.scheduleData)
+      setPeriodSlots(response.periodSlots)
+      toast({
+        title: "تم الحفظ",
+        description: "تم حفظ الجدول بنجاح",
+      })
+      return true
+    } catch (error) {
+      setScheduleData(previousSchedule)
+      setPeriodSlots(previousPeriodSlots)
+      toast({
+        title: "تعذر حفظ الجدول",
+        description: error instanceof Error ? error.message : "حدث خطأ أثناء حفظ الجدول",
+        variant: "destructive",
+      })
+      return false
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
+  const applyPeriodTimes = async () => {
     const updatedSchedule = scheduleData.map((day) => ({
       ...day,
       periods: day.periods.map((period) => {
@@ -277,15 +182,27 @@ export default function SchedulePage() {
     }))
 
     setScheduleData(updatedSchedule)
-    saveScheduleToStorage(updatedSchedule)
+    const saved = await persistSchedule(updatedSchedule, periodSlots)
+    if (!saved) return
     toast({
       title: "تم تحديث الأوقات",
       description: "تم تطبيق أوقات الحصص الجديدة بنجاح",
     })
   }
 
+  const openAddLessonDialog = () => {
+    resetAddEventFields()
+    setIsAddEventOpen(true)
+  }
+
+  const openTestLessonDialog = () => {
+    setTestLessonDay(scheduleData[0]?.day || "الأحد")
+    setTestLessonPeriod(String(periodSlots[0]?.id || 1))
+    setIsTestLessonDialogOpen(true)
+  }
+
   // وظيفة إضافة حصة جديدة
-  const handleAddEvent = () => {
+  const handleAddEvent = async () => {
     // تحويل رقم الحصة إلى رقم
     const periodId = Number.parseInt(addEventPeriod, 10)
 
@@ -330,9 +247,9 @@ export default function SchedulePage() {
       room: addEventRoom,
     }
 
-    // حفظ التغييرات
     setScheduleData(updatedSchedule)
-    saveScheduleToStorage(updatedSchedule)
+    const saved = await persistSchedule(updatedSchedule)
+    if (!saved) return
 
     // إغلاق مربع الحوار وإعادة تعيين الحقول
     setIsAddEventOpen(false)
@@ -345,7 +262,7 @@ export default function SchedulePage() {
   }
 
   // وظيفة تعديل حصة
-  const handleEditEvent = () => {
+  const handleEditEvent = async () => {
     // التحقق من البيانات
     if (!editEventSubject || !editEventTeacher || !editEventRoom) {
       toast({
@@ -365,9 +282,9 @@ export default function SchedulePage() {
       room: editEventRoom,
     }
 
-    // حفظ التغييرات
     setScheduleData(updatedSchedule)
-    saveScheduleToStorage(updatedSchedule)
+    const saved = await persistSchedule(updatedSchedule)
+    if (!saved) return
 
     // إغلاق مربع الحوار
     setIsEditEventOpen(false)
@@ -401,8 +318,8 @@ export default function SchedulePage() {
   }
 
   // وظيفة حفظ الجدول كاملاً
-  const saveFullSchedule = () => {
-    saveScheduleToStorage(scheduleData)
+  const saveFullSchedule = async () => {
+    await persistSchedule(scheduleData)
   }
 
   // وظيفة طباعة الجدول
@@ -465,43 +382,97 @@ export default function SchedulePage() {
   }
 
   // وظيفة إضافة حصة اختبارية سريعة
-  const addTestLesson = () => {
-    // اختيار يوم وحصة عشوائية
-    const randomDayIndex = Math.floor(Math.random() * scheduleData.length)
-    const randomPeriodIndex = Math.floor(Math.random() * 7)
+  const addTestLesson = async () => {
+    const periodId = Number.parseInt(testLessonPeriod, 10)
+    const dayIndex = scheduleData.findIndex((day) => day.day === testLessonDay)
 
-    // تجاوز فترة الاستراحة
-    if (scheduleData[randomDayIndex].periods[randomPeriodIndex].subject === "استراحة") {
+    if (dayIndex === -1) {
       toast({
-        title: "تنبيه",
-        description: "لا يمكن تعديل فترة الاستراحة، يرجى المحاولة مرة أخرى",
+        title: "خطأ",
+        description: "لم يتم العثور على اليوم المحدد",
+        variant: "destructive",
       })
       return
     }
 
-    // اختيار مادة ومعلم وقاعة عشوائية
-    const randomSubject = subjects[Math.floor(Math.random() * subjects.length)]
-    const randomTeacher = teachers[Math.floor(Math.random() * teachers.length)].name
-    const randomRoom = `${Math.floor(Math.random() * 10) + 100}`
-
-    // تحديث الجدول
-    const updatedSchedule = [...scheduleData]
-    updatedSchedule[randomDayIndex].periods[randomPeriodIndex] = {
-      ...updatedSchedule[randomDayIndex].periods[randomPeriodIndex],
-      subject: randomSubject,
-      teacher: randomTeacher,
-      room: randomRoom,
+    const periodIndex = scheduleData[dayIndex].periods.findIndex((period) => period.id === periodId)
+    if (periodIndex === -1) {
+      toast({
+        title: "خطأ",
+        description: "لم يتم العثور على الحصة المحددة",
+        variant: "destructive",
+      })
+      return
     }
 
-    // حفظ التغييرات
+    const targetSlot = scheduleData[dayIndex].periods[periodIndex]
+    if (targetSlot.subject === "استراحة") {
+      toast({
+        title: "خطأ",
+        description: "لا يمكن إضافة حصة اختبارية في وقت الاستراحة",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const selectedTeacherName =
+      selectedTeacher !== "all"
+        ? teachers.find((teacher) => teacher.id === selectedTeacher)?.name || teachers[0].name
+        : ""
+    const teacherName = selectedTeacherName || targetSlot.teacher || teachers[0].name
+    const roomName = targetSlot.room || "T-01"
+    const replacedSubject = targetSlot.subject
+
+    const updatedSchedule = [...scheduleData]
+    updatedSchedule[dayIndex].periods[periodIndex] = {
+      ...updatedSchedule[dayIndex].periods[periodIndex],
+      subject: "حصة اختبارية",
+      teacher: teacherName,
+      room: roomName,
+    }
+
     setScheduleData(updatedSchedule)
-    saveScheduleToStorage(updatedSchedule)
+    const saved = await persistSchedule(updatedSchedule)
+    if (!saved) return
+
+    markSlotAsHighlighted(dayIndex, periodIndex)
+    setIsTestLessonDialogOpen(false)
 
     toast({
       title: "تمت الإضافة",
-      description: `تمت إضافة حصة اختبارية (${randomSubject}) بنجاح`,
+      description:
+        replacedSubject && replacedSubject !== "حصة اختبارية"
+          ? `تم استبدال ${replacedSubject} بحصة اختبارية في ${scheduleData[dayIndex].day} - ${targetSlot.time}`
+          : `تمت إضافة حصة اختبارية في ${scheduleData[dayIndex].day} - ${targetSlot.time}`,
     })
   }
+
+  const refreshSchedule = () => {
+    void (async () => {
+      setIsSyncing(true)
+      try {
+        const response = await fetchScheduleSnapshot()
+        setScheduleData(response.scheduleData)
+        setPeriodSlots(response.periodSlots)
+        toast({
+          title: "تم تحديث الجدول",
+          description: "تم تحميل أحدث نسخة من الجدول الدراسي",
+        })
+      } catch (error) {
+        toast({
+          title: "تعذر تحديث الجدول",
+          description: error instanceof Error ? error.message : "حدث خطأ أثناء تحميل الجدول",
+          variant: "destructive",
+        })
+      } finally {
+        setIsSyncing(false)
+      }
+    })()
+  }
+
+  const selectedTestLessonSlot =
+    scheduleData.find((day) => day.day === testLessonDay)?.periods.find((period) => period.id === Number.parseInt(testLessonPeriod, 10)) ||
+    null
 
   return (
     <div className="container mx-auto p-4 space-y-6">
@@ -513,7 +484,7 @@ export default function SchedulePage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" className="flex items-center gap-2">
+          <Button variant="outline" className="flex items-center gap-2" onClick={refreshSchedule} disabled={isSyncing}>
             <RefreshCw className="h-4 w-4" />
             تحديث
           </Button>
@@ -521,26 +492,20 @@ export default function SchedulePage() {
             <Printer className="h-4 w-4" />
             طباعة
           </Button>
-          <Button variant="outline" className="flex items-center gap-2">
-            <Download className="h-4 w-4" />
-            تصدير
-          </Button>
           {!isStudent && (
             <>
-              <Button variant="outline" className="flex items-center gap-2" onClick={saveFullSchedule}>
+              <Button variant="outline" className="flex items-center gap-2" onClick={saveFullSchedule} disabled={isSyncing}>
                 <Save className="h-4 w-4" />
                 حفظ الجدول
               </Button>
-              <Button variant="outline" className="flex items-center gap-2" onClick={addTestLesson}>
+              <Button variant="outline" className="flex items-center gap-2" onClick={openTestLessonDialog} disabled={isSyncing}>
                 <Plus className="h-4 w-4" />
                 إضافة حصة اختبارية
               </Button>
               <Button
                 className="flex items-center gap-2 bg-[#0a8a74] hover:bg-[#097a67]"
-                onClick={() => {
-                  resetAddEventFields()
-                  setIsAddEventOpen(true)
-                }}
+                onClick={openAddLessonDialog}
+                disabled={isSyncing}
               >
                 <Clock className="h-4 w-4" />
                 إضافة حصة
@@ -597,89 +562,6 @@ export default function SchedulePage() {
           </CardContent>
         </Card>
       )}
-
-      {!isStudent && <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>إضافة حصة جديدة</CardTitle>
-          <CardDescription>أضف حصة جديدة إلى الجدول الدراسي بشكل مباشر</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div>
-              <Label htmlFor="simple-day">اليوم</Label>
-              <Select value={addEventDay} onValueChange={setAddEventDay}>
-                <SelectTrigger id="simple-day">
-                  <SelectValue placeholder="اختر اليوم" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="الأحد">الأحد</SelectItem>
-                  <SelectItem value="الاثنين">الاثنين</SelectItem>
-                  <SelectItem value="الثلاثاء">الثلاثاء</SelectItem>
-                  <SelectItem value="الأربعاء">الأربعاء</SelectItem>
-                  <SelectItem value="الخميس">الخميس</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="simple-period">الحصة</Label>
-              <Select value={addEventPeriod} onValueChange={setAddEventPeriod}>
-                <SelectTrigger id="simple-period">
-                  <SelectValue placeholder="اختر الحصة" />
-                </SelectTrigger>
-                <SelectContent>
-                  {periodSlots.map((slot) => (
-                    <SelectItem key={slot.id} value={String(slot.id)}>
-                      {slot.name} ({slot.start} - {slot.end})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="simple-subject">المادة</Label>
-              <Select value={addEventSubject} onValueChange={setAddEventSubject}>
-                <SelectTrigger id="simple-subject">
-                  <SelectValue placeholder="اختر المادة" />
-                </SelectTrigger>
-                <SelectContent>
-                  {subjects.map((subject) => (
-                    <SelectItem key={subject} value={subject}>
-                      {subject}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="simple-teacher">المعلم</Label>
-              <Select value={addEventTeacher} onValueChange={setAddEventTeacher}>
-                <SelectTrigger id="simple-teacher">
-                  <SelectValue placeholder="اختر المعلم" />
-                </SelectTrigger>
-                <SelectContent>
-                  {teachers.map((teacher) => (
-                    <SelectItem key={teacher.id} value={teacher.name}>
-                      {teacher.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="simple-room">القاعة</Label>
-              <Input
-                id="simple-room"
-                value={addEventRoom}
-                onChange={(e) => setAddEventRoom(e.target.value)}
-                placeholder="رقم القاعة"
-              />
-            </div>
-          </div>
-          <Button className="mt-4 bg-[#0a8a74] hover:bg-[#097a67]" onClick={handleAddEvent}>
-            إضافة الحصة
-          </Button>
-        </CardContent>
-      </Card>}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="md:col-span-2">
@@ -789,7 +671,11 @@ export default function SchedulePage() {
                           <TableCell
                             key={period.id}
                             style={getPeriodCellStyle(period.subject)}
-                            className="text-slate-900"
+                            className={`text-slate-900 transition-all ${
+                              highlightedSlot?.dayIndex === dayIndex && highlightedSlot?.periodIndex === periodIndex
+                                ? "ring-2 ring-emerald-600 ring-inset shadow-[0_0_0_2px_rgba(5,150,105,0.2)]"
+                                : ""
+                            }`}
                           >
                             {period.subject !== "استراحة" ? (
                               <div className="text-xs">
@@ -830,7 +716,16 @@ export default function SchedulePage() {
                 <CardContent className="p-0">
                   <div className="divide-y">
                     {day.periods.map((period, periodIndex) => (
-                      <div key={period.id} className={`p-3 ${period.subject === "استراحة" ? "bg-gray-100" : ""}`}>
+                      <div
+                        key={period.id}
+                        className={`p-3 transition-all ${
+                          period.subject === "استراحة" ? "bg-gray-100" : ""
+                        } ${
+                          highlightedSlot?.dayIndex === dayIndex && highlightedSlot?.periodIndex === periodIndex
+                            ? "ring-2 ring-emerald-600 ring-inset bg-emerald-50"
+                            : ""
+                        }`}
+                      >
                         <div className="text-xs text-muted-foreground">{period.time}</div>
                         {period.subject !== "استراحة" ? (
                           <>
@@ -860,6 +755,163 @@ export default function SchedulePage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {!isStudent && <Dialog open={isTestLessonDialogOpen} onOpenChange={setIsTestLessonDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>إضافة حصة اختبارية</DialogTitle>
+            <DialogDescription>اختر اليوم والحصة من القائمة ليتم وضع الحصة الاختبارية في المكان الذي تحدده.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="test-day" className="text-right">
+                اليوم
+              </Label>
+              <Select value={testLessonDay} onValueChange={setTestLessonDay}>
+                <SelectTrigger id="test-day" className="col-span-3">
+                  <SelectValue placeholder="اختر اليوم" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="الأحد">الأحد</SelectItem>
+                  <SelectItem value="الاثنين">الاثنين</SelectItem>
+                  <SelectItem value="الثلاثاء">الثلاثاء</SelectItem>
+                  <SelectItem value="الأربعاء">الأربعاء</SelectItem>
+                  <SelectItem value="الخميس">الخميس</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="test-period" className="text-right">
+                الحصة
+              </Label>
+              <Select value={testLessonPeriod} onValueChange={setTestLessonPeriod}>
+                <SelectTrigger id="test-period" className="col-span-3">
+                  <SelectValue placeholder="اختر الحصة" />
+                </SelectTrigger>
+                <SelectContent>
+                  {periodSlots.map((slot) => (
+                    <SelectItem key={slot.id} value={String(slot.id)}>
+                      {slot.name} ({slot.start} - {slot.end})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {selectedTestLessonSlot && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                <p className="font-medium text-slate-900">معاينة الحصة</p>
+                <p>الوقت: {selectedTestLessonSlot.time}</p>
+                <p>المادة الحالية: {selectedTestLessonSlot.subject || "فارغة"}</p>
+                <p>المعلم: {selectedTestLessonSlot.teacher || "غير محدد"}</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsTestLessonDialogOpen(false)}>
+              إلغاء
+            </Button>
+            <Button type="submit" onClick={addTestLesson} className="bg-[#0a8a74] hover:bg-[#097a67]">
+              إضافة الحصة الاختبارية
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>}
+
+      {!isStudent && <Dialog open={isAddEventOpen} onOpenChange={setIsAddEventOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>إضافة حصة جديدة</DialogTitle>
+            <DialogDescription>أدخل بيانات الحصة ثم اضغط إضافة.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="add-day" className="text-right">
+                اليوم
+              </Label>
+              <Select value={addEventDay} onValueChange={setAddEventDay}>
+                <SelectTrigger id="add-day" className="col-span-3">
+                  <SelectValue placeholder="اختر اليوم" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="الأحد">الأحد</SelectItem>
+                  <SelectItem value="الاثنين">الاثنين</SelectItem>
+                  <SelectItem value="الثلاثاء">الثلاثاء</SelectItem>
+                  <SelectItem value="الأربعاء">الأربعاء</SelectItem>
+                  <SelectItem value="الخميس">الخميس</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="add-period" className="text-right">
+                الحصة
+              </Label>
+              <Select value={addEventPeriod} onValueChange={setAddEventPeriod}>
+                <SelectTrigger id="add-period" className="col-span-3">
+                  <SelectValue placeholder="اختر الحصة" />
+                </SelectTrigger>
+                <SelectContent>
+                  {periodSlots.map((slot) => (
+                    <SelectItem key={slot.id} value={String(slot.id)}>
+                      {slot.name} ({slot.start} - {slot.end})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="add-subject" className="text-right">
+                المادة
+              </Label>
+              <Select value={addEventSubject} onValueChange={setAddEventSubject}>
+                <SelectTrigger id="add-subject" className="col-span-3">
+                  <SelectValue placeholder="اختر المادة" />
+                </SelectTrigger>
+                <SelectContent>
+                  {subjects.map((subject) => (
+                    <SelectItem key={subject} value={subject}>
+                      {subject}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="add-teacher" className="text-right">
+                المعلم
+              </Label>
+              <Select value={addEventTeacher} onValueChange={setAddEventTeacher}>
+                <SelectTrigger id="add-teacher" className="col-span-3">
+                  <SelectValue placeholder="اختر المعلم" />
+                </SelectTrigger>
+                <SelectContent>
+                  {teachers.map((teacher) => (
+                    <SelectItem key={teacher.id} value={teacher.name}>
+                      {teacher.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="add-room" className="text-right">
+                القاعة
+              </Label>
+              <Input
+                id="add-room"
+                value={addEventRoom}
+                onChange={(e) => setAddEventRoom(e.target.value)}
+                className="col-span-3"
+                placeholder="رقم القاعة"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="submit" onClick={handleAddEvent} className="bg-[#0a8a74] hover:bg-[#097a67]">
+              إضافة الحصة
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>}
 
       {/* مربع حوار تعديل الحصة */}
       {!isStudent && <Dialog open={isEditEventOpen} onOpenChange={setIsEditEventOpen}>

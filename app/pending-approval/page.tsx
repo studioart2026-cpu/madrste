@@ -45,7 +45,7 @@ export default function PendingApprovalPage() {
                   <div className="w-10 h-10 rounded-full bg-[#0a8a74] text-white flex items-center justify-center">
                     <span>٢</span>
                   </div>
-                  <span className="mr-3 text-gray-700">تم التحقق من البريد الإلكتروني</span>
+                  <span className="mr-3 text-gray-700">تم إرسال الطلب للإدارة</span>
                 </div>
                 <div className="flex items-center">
                   <div className="w-10 h-10 rounded-full bg-amber-500 text-white flex items-center justify-center">
@@ -89,8 +89,8 @@ export default function PendingApprovalPage() {
                 <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg">
                   <h3 className="font-medium text-amber-800 mb-2">ماذا يحدث الآن؟</h3>
                   <p className="text-amber-700">
-                    سيقوم مدير النظام بمراجعة طلبك والموافقة عليه. سيتم إعلامك عبر البريد الإلكتروني عند الموافقة على
-                    حسابك.
+                    سيقوم مدير النظام بمراجعة طلبك وتفعيل الحساب. بعد الموافقة يمكنك تسجيل الدخول واستخدام النظام بشكل
+                    كامل.
                   </p>
                 </div>
 

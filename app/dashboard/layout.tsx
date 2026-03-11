@@ -10,6 +10,7 @@ import {
   Bell,
   BookText,
   Calendar,
+  ClipboardList,
   GraduationCap,
   Home,
   HelpCircle,
@@ -25,26 +26,139 @@ import {
   School,
 } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useAuth } from "@/components/auth-provider"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
+import { defaultDashboardContent } from "@/lib/dashboard-data"
+import { fetchDashboardData } from "@/lib/school-api"
+import { type SmartAlert } from "@/lib/school-insights"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
-  const { userName, userType, logout } = useAuth()
+  const { userName, userType, email, logout } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
   const isMobile = useMediaQuery("(max-width: 768px)")
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [profileImage, setProfileImage] = useState<string | null>(null)
+  const [notificationItems, setNotificationItems] = useState<SmartAlert[]>([])
+  const [readAlertIds, setReadAlertIds] = useState<string[]>([])
 
   // إغلاق القائمة عند تغيير المسار (للهواتف المحمولة)
   useEffect(() => {
     setOpen(false)
   }, [pathname])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    let isMounted = true
+
+    const loadProfileImage = () => {
+      if (!email) {
+        setProfileImage(null)
+        return
+      }
+
+      const storedImage = localStorage.getItem(`profile-image:${email}`)
+      setProfileImage(storedImage || null)
+    }
+
+    const loadNotifications = async () => {
+      try {
+        const notificationsEnabled = localStorage.getItem("notifications-enabled")
+        if (notificationsEnabled === "false") {
+          setNotificationItems([])
+          return
+        }
+
+        const response = await fetchDashboardData()
+        if (!isMounted) {
+          return
+        }
+
+        const parsedAlerts = response.dashboard.smartAlerts
+        const visibleAlerts = parsedAlerts.filter((alert) => {
+          if (userType === "admin") return alert.audience.includes("admin")
+          if (userType === "teacher") return alert.audience.includes("teacher")
+          if (userType === "student") return alert.audience.includes("student")
+          return false
+        })
+        setNotificationItems(visibleAlerts)
+      } catch {
+        if (!isMounted) {
+          return
+        }
+
+        const fallbackAlerts = defaultDashboardContent.smartAlerts.filter((alert) => {
+          if (userType === "admin") return alert.audience.includes("admin")
+          if (userType === "teacher") return alert.audience.includes("teacher")
+          if (userType === "student") return alert.audience.includes("student")
+          return false
+        })
+        setNotificationItems(fallbackAlerts)
+      }
+
+      try {
+        const readIds = localStorage.getItem(`read-alert-ids:${email || userType || "guest"}`)
+        if (isMounted) {
+          setReadAlertIds(readIds ? (JSON.parse(readIds) as string[]) : [])
+        }
+      } catch {
+        if (isMounted) {
+          setReadAlertIds([])
+        }
+      }
+    }
+
+    const handleProfileUpdated = () => {
+      loadProfileImage()
+      void loadNotifications()
+    }
+
+    loadProfileImage()
+    void loadNotifications()
+    window.addEventListener("profile-updated", handleProfileUpdated)
+    window.addEventListener("dashboard-data-updated", handleProfileUpdated)
+    window.addEventListener("storage", handleProfileUpdated)
+
+    return () => {
+      isMounted = false
+      window.removeEventListener("profile-updated", handleProfileUpdated)
+      window.removeEventListener("dashboard-data-updated", handleProfileUpdated)
+      window.removeEventListener("storage", handleProfileUpdated)
+    }
+  }, [email, userType])
+
+  const unreadCount = notificationItems.filter((alert) => !readAlertIds.includes(alert.id)).length
+
+  const markAllNotificationsAsRead = () => {
+    const nextIds = notificationItems.map((alert) => alert.id)
+    setReadAlertIds(nextIds)
+    if (typeof window !== "undefined") {
+      localStorage.setItem(`read-alert-ids:${email || userType || "guest"}`, JSON.stringify(nextIds))
+    }
+  }
+
+  const markNotificationAsRead = (alertId: string) => {
+    const nextIds = Array.from(new Set([...readAlertIds, alertId]))
+    setReadAlertIds(nextIds)
+    if (typeof window !== "undefined") {
+      localStorage.setItem(`read-alert-ids:${email || userType || "guest"}`, JSON.stringify(nextIds))
+    }
+  }
 
   const getInitials = (name: string | null | undefined) => {
     try {
@@ -96,83 +210,97 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       href: "/dashboard",
       icon: <Home className="w-5 h-5 ml-2" />,
       active: pathname === "/dashboard",
-      showFor: ["student", "teacher", "admin"],
+      showFor: ["student", "teacher", "admin", "vice_admin"],
     },
     {
       label: "الطلاب",
       href: "/dashboard/students",
       icon: <GraduationCap className="w-5 h-5 ml-2" />,
       active: pathname === "/dashboard/students",
-      showFor: ["teacher", "admin"],
+      showFor: ["teacher", "admin", "vice_admin"],
     },
     {
       label: "المعلمين",
       href: "/dashboard/teachers",
       icon: <Users className="w-5 h-5 ml-2" />,
       active: pathname === "/dashboard/teachers",
-      showFor: ["admin"],
+      showFor: ["admin", "vice_admin"],
     },
     {
       label: "الفصول الدراسية",
       href: "/dashboard/classes",
       icon: <School className="w-5 h-5 ml-2" />,
       active: pathname === "/dashboard/classes",
-      showFor: ["teacher", "admin"],
+      showFor: ["teacher", "admin", "vice_admin"],
     },
     {
       label: "الجدول الدراسي",
       href: "/dashboard/schedule",
       icon: <Calendar className="w-5 h-5 ml-2" />,
       active: pathname === "/dashboard/schedule",
-      showFor: ["student", "teacher", "admin"],
+      showFor: ["student", "teacher", "admin", "vice_admin"],
     },
     {
       label: "الحضور والغياب",
       href: "/dashboard/attendance",
       icon: <FileText className="w-5 h-5 ml-2" />,
       active: pathname === "/dashboard/attendance",
-      showFor: ["teacher", "admin"],
+      showFor: ["teacher", "admin", "vice_admin"],
     },
     {
       label: "الدرجات",
       href: "/dashboard/grades",
       icon: <PieChart className="w-5 h-5 ml-2" />,
       active: pathname === "/dashboard/grades",
-      showFor: ["student", "teacher", "admin"],
+      showFor: ["student", "teacher", "admin", "vice_admin"],
     },
     {
       label: "الواجبات المنزلية",
       href: "/dashboard/homework",
       icon: <BookText className="w-5 h-5 ml-2" />,
       active: pathname === "/dashboard/homework",
-      showFor: ["student", "teacher", "admin"],
+      showFor: ["student", "teacher", "admin", "vice_admin"],
     },
     {
       label: "التقارير",
       href: "/dashboard/reports",
       icon: <FileText className="w-5 h-5 ml-2" />,
       active: pathname === "/dashboard/reports",
-      showFor: ["student", "teacher", "admin"],
+      showFor: ["student", "teacher", "admin", "vice_admin"],
+    },
+    {
+      label: "الملف الموحد",
+      href: "/dashboard/student-profile",
+      icon: <ClipboardList className="w-5 h-5 ml-2" />,
+      active: pathname === "/dashboard/student-profile",
+      showFor: ["student", "teacher", "admin", "vice_admin"],
     },
     {
       label: "الملاحظات",
       href: "/dashboard/notes",
       icon: <PanelLeft className="w-5 h-5 ml-2" />,
       active: pathname === "/dashboard/notes",
-      showFor: ["student", "teacher", "admin"],
+      showFor: ["student", "teacher", "admin", "vice_admin"],
     },
     {
       label: "لوح الرسم",
       href: "/dashboard/drawing-board",
       icon: <Palette className="w-5 h-5 ml-2" />,
       active: pathname === "/dashboard/drawing-board",
-      showFor: ["student", "teacher", "admin"],
+      showFor: ["student", "teacher", "admin", "vice_admin"],
     },
     {
       label: "طلبات تسجيل الدخول",
       href: "/dashboard/admin/user-approvals",
       icon: <User className="w-5 h-5 ml-2" />,
       active: pathname === "/dashboard/admin/user-approvals",
+      showFor: ["admin"],
+    },
+    {
+      label: "المستخدمون",
+      href: "/dashboard/users",
+      icon: <Users className="w-5 h-5 ml-2" />,
+      active: pathname === "/dashboard/users",
       showFor: ["admin"],
     },
   ]
@@ -357,16 +485,50 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <h2 className="text-xl font-bold">نظام إدارة المدرسة المتوسطة ١٣٦</h2>
             </nav>
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" className="relative" aria-label="الإشعارات">
-                <Bell className="h-5 w-5" />
-                <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-[10px] font-medium text-primary-foreground flex items-center justify-center">
-                  3
-                </span>
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="relative" aria-label="الإشعارات">
+                    <Bell className="h-5 w-5" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 h-4 min-w-4 rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground flex items-center justify-center">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-80">
+                  <div className="flex items-center justify-between px-2 py-1.5">
+                    <DropdownMenuLabel className="p-0">الإشعارات</DropdownMenuLabel>
+                    <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={markAllNotificationsAsRead}>
+                      تعيين الكل كمقروء
+                    </Button>
+                  </div>
+                  <DropdownMenuSeparator />
+                  {notificationItems.length === 0 && (
+                    <div className="px-2 py-3 text-sm text-muted-foreground">لا توجد إشعارات حالياً</div>
+                  )}
+                  {notificationItems.map((alert) => {
+                    const isUnread = !readAlertIds.includes(alert.id)
+                    return (
+                      <DropdownMenuItem
+                        key={alert.id}
+                        className="flex flex-col items-start gap-1 py-3"
+                        onClick={() => markNotificationAsRead(alert.id)}
+                      >
+                        <div className="flex w-full items-center justify-between gap-2">
+                          <span className={cn("font-medium", isUnread && "text-primary")}>{alert.title}</span>
+                          {isUnread && <span className="h-2 w-2 rounded-full bg-primary" />}
+                        </div>
+                        <span className="text-xs text-muted-foreground whitespace-normal">{alert.description}</span>
+                      </DropdownMenuItem>
+                    )
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <div className="flex items-center gap-2">
                 <span className="hidden text-sm md:inline-block">{userName || "مستخدم النظام"}</span>
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src="/placeholder.svg" alt={userName || "المستخدم"} />
+                  <AvatarImage src={profileImage || "/placeholder.svg"} alt={userName || "المستخدم"} />
                   <AvatarFallback>{getInitials(userName)}</AvatarFallback>
                 </Avatar>
               </div>

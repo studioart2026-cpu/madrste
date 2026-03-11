@@ -1,0 +1,203 @@
+export interface TeacherDirectoryEntry {
+  id: string
+  name: string
+  teacherId: string
+  specialization: string
+  department: string
+  phone: string
+  status: "نشط" | "غير نشط" | "إجازة"
+  birthDate: string
+  address: string
+  notes?: string
+  attendance?: number
+  performance?: number
+  lastLogin?: string
+  profileImage?: string
+  email?: string
+  emergencyContact?: string
+  medicalNotes?: string
+  joinDate?: string
+  classes?: string[]
+  subjects?: string[]
+}
+
+export const teacherDirectory: TeacherDirectoryEntry[] = [
+  {
+    id: "1",
+    name: "نورة الأحمد",
+    teacherId: "T10001",
+    specialization: "رياضيات",
+    department: "قسم الرياضيات",
+    phone: "0501234567",
+    status: "نشط",
+    birthDate: "1985-05-15",
+    address: "الرياض، حي النزهة",
+    attendance: 98,
+    performance: 92,
+    lastLogin: "2023-09-15",
+    email: "noura@example.com",
+    emergencyContact: "0509876543",
+    classes: ["الصف الأول", "الصف الثاني"],
+    subjects: ["رياضيات أساسية", "جبر"],
+    joinDate: "2018-08-28",
+  },
+  {
+    id: "2",
+    name: "سارة المحمد",
+    teacherId: "T10002",
+    specialization: "علوم",
+    department: "قسم العلوم",
+    phone: "0507654321",
+    status: "نشط",
+    birthDate: "1987-03-22",
+    address: "الرياض، حي الملقا",
+    attendance: 95,
+    performance: 90,
+    lastLogin: "2023-09-14",
+    email: "sarah@example.com",
+    emergencyContact: "0501122334",
+    classes: ["الصف الثاني", "الصف الثالث"],
+    subjects: ["أحياء", "كيمياء"],
+    joinDate: "2019-08-29",
+  },
+  {
+    id: "3",
+    name: "منى العبدالله",
+    teacherId: "T10003",
+    specialization: "لغة عربية",
+    department: "قسم اللغة العربية",
+    phone: "0551234567",
+    status: "نشط",
+    birthDate: "1982-11-10",
+    address: "الرياض، حي الياسمين",
+    attendance: 97,
+    performance: 95,
+    lastLogin: "2023-09-13",
+    email: "mona@example.com",
+    emergencyContact: "0552233445",
+    classes: ["الصف الأول", "الصف الثالث"],
+    subjects: ["نحو", "أدب عربي"],
+    joinDate: "2017-08-30",
+  },
+  {
+    id: "4",
+    name: "هند السعد",
+    teacherId: "T10004",
+    specialization: "لغة إنجليزية",
+    department: "قسم اللغة الإنجليزية",
+    phone: "0561234567",
+    status: "غير نشط",
+    birthDate: "1988-09-05",
+    address: "الرياض، حي الورود",
+    attendance: 75,
+    performance: 80,
+    lastLogin: "2023-08-20",
+    email: "hind@example.com",
+    emergencyContact: "0563344556",
+    medicalNotes: "إجازة مرضية",
+    classes: ["الصف الثاني"],
+    subjects: ["قواعد اللغة الإنجليزية"],
+    joinDate: "2020-08-28",
+  },
+  {
+    id: "5",
+    name: "عبير الخالد",
+    teacherId: "T10005",
+    specialization: "تربية إسلامية",
+    department: "قسم التربية الإسلامية",
+    phone: "0571234567",
+    status: "نشط",
+    birthDate: "1980-07-18",
+    address: "الرياض، حي الربيع",
+    attendance: 99,
+    performance: 93,
+    lastLogin: "2023-09-15",
+    email: "abeer@example.com",
+    emergencyContact: "0574455667",
+    classes: ["الصف الأول", "الصف الثاني", "الصف الثالث"],
+    subjects: ["قرآن", "توحيد"],
+    joinDate: "2016-08-29",
+  },
+  {
+    id: "6",
+    name: "ريم الفهد",
+    teacherId: "T10006",
+    specialization: "حاسب آلي",
+    department: "قسم الحاسب",
+    phone: "0581234567",
+    status: "نشط",
+    birthDate: "1990-04-12",
+    address: "الرياض، حي العليا",
+    attendance: 96,
+    performance: 98,
+    lastLogin: "2023-09-15",
+    email: "reem@example.com",
+    emergencyContact: "0585566778",
+    classes: ["الصف الثاني", "الصف الثالث"],
+    subjects: ["برمجة", "تقنية معلومات"],
+    joinDate: "2021-08-30",
+  },
+  {
+    id: "7",
+    name: "لمياء السلطان",
+    teacherId: "T10007",
+    specialization: "اجتماعيات",
+    department: "قسم الاجتماعيات",
+    phone: "0591234567",
+    status: "إجازة",
+    birthDate: "1983-02-25",
+    address: "الرياض، حي الصحافة",
+    attendance: 85,
+    performance: 88,
+    lastLogin: "2023-07-10",
+    email: "lamia@example.com",
+    emergencyContact: "0596677889",
+    classes: ["الصف الأول"],
+    subjects: ["تاريخ", "جغرافيا"],
+    joinDate: "2019-08-28",
+  },
+  {
+    id: "8",
+    name: "أمل الناصر",
+    teacherId: "T10008",
+    specialization: "فنية",
+    department: "قسم التربية الفنية",
+    phone: "0501122334",
+    status: "نشط",
+    birthDate: "1986-10-30",
+    address: "الرياض، حي النخيل",
+    attendance: 94,
+    performance: 91,
+    lastLogin: "2023-09-14",
+    email: "amal@example.com",
+    emergencyContact: "0507788990",
+    classes: ["الصف الأول", "الصف الثاني", "الصف الثالث"],
+    subjects: ["رسم", "أشغال يدوية"],
+    joinDate: "2018-08-29",
+  },
+  {
+    id: "9",
+    name: "نوف العتيبي",
+    teacherId: "T10009",
+    specialization: "تربية بدنية",
+    department: "قسم التربية البدنية",
+    phone: "0503344556",
+    status: "نشط",
+    birthDate: "1989-06-14",
+    address: "الرياض، حي العقيق",
+    attendance: 93,
+    performance: 89,
+    lastLogin: "2023-09-14",
+    email: "nouf.pe@example.com",
+    emergencyContact: "0509988776",
+    classes: ["الصف الأول", "الصف الثاني", "الصف الثالث"],
+    subjects: ["لياقة بدنية", "مهارات حركية"],
+    joinDate: "2022-08-28",
+  },
+]
+
+export const teacherNames = teacherDirectory.map((teacher) => `أ. ${teacher.name}`)
+
+export const teacherNameBySpecialization: Record<string, string> = Object.fromEntries(
+  teacherDirectory.map((teacher) => [teacher.specialization, `أ. ${teacher.name}`]),
+)

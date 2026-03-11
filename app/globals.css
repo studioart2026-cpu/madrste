@@ -102,6 +102,16 @@ html[dir="rtl"] td {
   text-align: right;
 }
 
+/* إصلاح عرض حقول التاريخ داخل واجهة RTL */
+html[dir="rtl"] input[type="date"] {
+  direction: ltr;
+  text-align: left;
+}
+
+html[dir="rtl"] input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+}
+
 /* تحسين عرض الجداول في الاتجاه من اليمين إلى اليسار */
 .rtl-table th:first-child,
 .rtl-table td:first-child {

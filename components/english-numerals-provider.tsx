@@ -23,6 +23,35 @@ function normalizeTextNode(node: Text): void {
   }
 }
 
+function normalizeElementAttributes(root: ParentNode): void {
+  const elements = root.querySelectorAll<HTMLElement>("*")
+  elements.forEach((element) => {
+    const placeholder = element.getAttribute("placeholder")
+    if (placeholder) {
+      const normalized = toEnglishDigits(placeholder)
+      if (placeholder !== normalized) {
+        element.setAttribute("placeholder", normalized)
+      }
+    }
+
+    const title = element.getAttribute("title")
+    if (title) {
+      const normalized = toEnglishDigits(title)
+      if (title !== normalized) {
+        element.setAttribute("title", normalized)
+      }
+    }
+
+    const ariaLabel = element.getAttribute("aria-label")
+    if (ariaLabel) {
+      const normalized = toEnglishDigits(ariaLabel)
+      if (ariaLabel !== normalized) {
+        element.setAttribute("aria-label", normalized)
+      }
+    }
+  })
+}
+
 function normalizeInputs(): void {
   const fields = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea")
   fields.forEach((field) => {
@@ -40,6 +69,22 @@ function normalizeInputs(): void {
 
 export function EnglishNumeralsProvider() {
   useEffect(() => {
+    const originalDateToLocaleDateString = Date.prototype.toLocaleDateString
+    const originalDateToLocaleString = Date.prototype.toLocaleString
+    const originalNumberToLocaleString = Number.prototype.toLocaleString
+
+    Date.prototype.toLocaleDateString = function (...args: Parameters<Date["toLocaleDateString"]>) {
+      return toEnglishDigits(originalDateToLocaleDateString.apply(this, args))
+    }
+
+    Date.prototype.toLocaleString = function (...args: Parameters<Date["toLocaleString"]>) {
+      return toEnglishDigits(originalDateToLocaleString.apply(this, args))
+    }
+
+    Number.prototype.toLocaleString = function (...args: Parameters<Number["toLocaleString"]>) {
+      return toEnglishDigits(originalNumberToLocaleString.apply(this, args))
+    }
+
     const walkAndNormalize = (root: Node) => {
       const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
       let current = walker.nextNode()
@@ -50,6 +95,7 @@ export function EnglishNumeralsProvider() {
     }
 
     walkAndNormalize(document.body)
+    normalizeElementAttributes(document.body)
     normalizeInputs()
 
     const observer = new MutationObserver((mutations) => {
@@ -64,9 +110,11 @@ export function EnglishNumeralsProvider() {
             normalizeTextNode(node as Text)
           } else if (node.nodeType === Node.ELEMENT_NODE) {
             walkAndNormalize(node)
+            normalizeElementAttributes(node as ParentNode)
           }
         })
       }
+      normalizeElementAttributes(document.body)
       normalizeInputs()
     })
 
@@ -94,6 +142,9 @@ export function EnglishNumeralsProvider() {
     document.addEventListener("change", handleInput, true)
 
     return () => {
+      Date.prototype.toLocaleDateString = originalDateToLocaleDateString
+      Date.prototype.toLocaleString = originalDateToLocaleString
+      Number.prototype.toLocaleString = originalNumberToLocaleString
       observer.disconnect()
       document.removeEventListener("input", handleInput, true)
       document.removeEventListener("change", handleInput, true)

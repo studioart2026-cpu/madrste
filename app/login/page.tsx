@@ -13,7 +13,6 @@ import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/components/auth-provider"
 import { AlertCircle, Eye, EyeOff, ArrowRight } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { usersStore } from "@/lib/users-store"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -23,7 +22,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
-  const { login } = useAuth()
+  const { login, isReady } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -31,32 +30,19 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      // التحقق من بيانات المستخدم في مخزن المستخدمين
-      const user = usersStore.validateCredentials(email, password)
+      const user = await login(email, password)
 
-      if (user) {
-        // التحقق من حالة الموافقة على المستخدم
-        if (!user.isApproved) {
-          login(user.userType, user.name, user.email, false)
-          router.push("/pending-approval")
-          return
-        }
-
-        // تسجيل الدخول بنجاح
-        login(user.userType, user.name, user.email, true)
+      if (!user.isApproved) {
+        router.push("/pending-approval")
+      } else {
         toast({
           title: "تم تسجيل الدخول بنجاح",
           description: "مرحباً بك في نظام إدارة المدرسة",
         })
         router.push("/dashboard")
-        return
       }
-
-      // في حالة عدم مطابقة البيانات
-      setError("البريد الإلكتروني أو كلمة المرور غير صحيحة")
     } catch (error) {
-      console.error("Login error:", error)
-      setError("حدث خطأ أثناء تسجيل الدخول. يرجى المحاولة مرة أخرى.")
+      setError(error instanceof Error ? error.message : "حدث خطأ أثناء تسجيل الدخول. يرجى المحاولة مرة أخرى.")
     } finally {
       setIsLoading(false)
     }
@@ -167,7 +153,7 @@ export default function LoginPage() {
                   <Button
                     type="submit"
                     className="w-full h-12 text-lg bg-[#0a8a74] hover:bg-[#097a67]"
-                    disabled={isLoading}
+                    disabled={isLoading || !isReady}
                   >
                     {isLoading ? (
                       <span className="flex items-center justify-center">

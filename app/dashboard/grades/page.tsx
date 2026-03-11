@@ -21,26 +21,10 @@ import { PlusCircle, Search } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/components/auth-provider"
+import { fetchGradesData, saveGradesData } from "@/lib/school-api"
+import { ALL_SUBJECTS, createDefaultGradeStudents, type GradeStudent } from "@/lib/school-data"
 
-interface Student {
-  id: string
-  name: string
-  class: string
-  section: string
-  grades: {
-    subject: string
-    grade: number
-    date: string
-    examType: string // إضافة نوع الاختبار
-  }[]
-}
-
-interface DirectoryStudent {
-  id?: string
-  name?: string
-  grade?: string
-  classroom?: string
-}
+type Student = GradeStudent
 
 interface GradeStats {
   average: number
@@ -52,121 +36,12 @@ interface GradeStats {
 
 const normalizeText = (value: string) => value.replace(/\s+/g, " ").trim()
 
-const classFromLevel = (level: string): string => {
-  if (["1", "١"].includes(level)) return "أول متوسط"
-  if (["2", "٢"].includes(level)) return "ثاني متوسط"
-  if (["3", "٣"].includes(level)) return "ثالث متوسط"
-  return "أول متوسط"
-}
-
-const classFromDirectory = (grade?: string, classroom?: string, index = 0): string => {
-  if (grade && grade.trim().length > 0) return normalizeClassLabel(grade, index)
-
-  if (classroom && classroom.includes("/")) {
-    const level = classroom.split("/")[0]?.trim() || ""
-    return classFromLevel(level)
-  }
-
-  return "أول متوسط"
-}
-
-const sectionFromClassroom = (classroom?: string, index = 0): string => {
-  if (classroom && classroom.includes("/")) {
-    const section = classroom.split("/")[1]?.trim() || ""
-    if (section) return `شعبة ${section}`
-  }
-  return normalizeSectionLabel(undefined, index)
-}
-
-const normalizeClassLabel = (className: string, index = 0): string => {
-  if (className.includes("متوسط")) return className
-  if (className.includes("الصف الأول")) return "أول متوسط"
-  if (className.includes("الصف الثاني")) return "ثاني متوسط"
-  if (className.includes("الصف الثالث")) return "ثالث متوسط"
-  return className
-}
-
-const normalizeSectionLabel = (sectionName?: string, index = 0): string => {
-  if (sectionName && sectionName.includes("شعبة")) return sectionName
-  if (sectionName && sectionName.trim().length > 0) return `شعبة ${sectionName}`
-  return `شعبة ${((index % 4) + 1).toString()}`
-}
-
-const ALL_SUBJECTS = [
-  "الرياضيات",
-  "العلوم",
-  "اللغة العربية",
-  "اللغة الإنجليزية",
-  "التربية الإسلامية",
-  "الاجتماعيات",
-  "الحاسب",
-  "التربية الفنية",
-  "التربية البدنية",
-]
-
-const DEFAULT_STUDENTS: Student[] = [
-  {
-    id: "1",
-    name: "سارة أحمد",
-    class: "أول متوسط",
-    section: "شعبة 1",
-    grades: [
-      { subject: "الرياضيات", grade: 85, date: "2023-09-15", examType: "فصلي أول" },
-      { subject: "العلوم", grade: 92, date: "2023-09-16", examType: "فصلي أول" },
-      { subject: "اللغة العربية", grade: 78, date: "2023-09-17", examType: "فصلي أول" },
-    ],
-  },
-  {
-    id: "2",
-    name: "نورة محمد",
-    class: "أول متوسط",
-    section: "شعبة 2",
-    grades: [
-      { subject: "الرياضيات", grade: 90, date: "2023-09-15", examType: "فصلي أول" },
-      { subject: "العلوم", grade: 88, date: "2023-09-16", examType: "فصلي أول" },
-      { subject: "اللغة العربية", grade: 95, date: "2023-09-17", examType: "فصلي أول" },
-    ],
-  },
-  {
-    id: "3",
-    name: "فاطمة علي",
-    class: "ثاني متوسط",
-    section: "شعبة 1",
-    grades: [
-      { subject: "الرياضيات", grade: 75, date: "2023-09-15", examType: "فصلي أول" },
-      { subject: "العلوم", grade: 82, date: "2023-09-16", examType: "فصلي أول" },
-      { subject: "اللغة العربية", grade: 88, date: "2023-09-17", examType: "فصلي أول" },
-    ],
-  },
-  {
-    id: "4",
-    name: "منى خالد",
-    class: "ثاني متوسط",
-    section: "شعبة 2",
-    grades: [
-      { subject: "الرياضيات", grade: 95, date: "2023-09-15", examType: "فصلي أول" },
-      { subject: "العلوم", grade: 91, date: "2023-09-16", examType: "فصلي أول" },
-      { subject: "اللغة العربية", grade: 89, date: "2023-09-17", examType: "فصلي أول" },
-    ],
-  },
-  {
-    id: "5",
-    name: "ليلى عبدالله",
-    class: "ثالث متوسط",
-    section: "شعبة 1",
-    grades: [
-      { subject: "الرياضيات", grade: 68, date: "2023-09-15", examType: "فصلي أول" },
-      { subject: "العلوم", grade: 72, date: "2023-09-16", examType: "فصلي أول" },
-      { subject: "اللغة العربية", grade: 80, date: "2023-09-17", examType: "فصلي أول" },
-    ],
-  },
-]
-
 export default function GradesPage() {
   const { toast } = useToast()
   const { userType, email, userName } = useAuth()
   const isStudent = userType === "student"
-  const [students, setStudents] = useState<Student[]>([])
+  const [students, setStudents] = useState<Student[]>(createDefaultGradeStudents())
+  const [isSaving, setIsSaving] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedClass, setSelectedClass] = useState<string>("all")
   const [selectedSubject, setSelectedSubject] = useState<string>("all")
@@ -185,87 +60,50 @@ export default function GradesPage() {
     "student2@example.com": "نورة محمد",
   }
 
-  // Load students from localStorage on component mount
   useEffect(() => {
-    const savedStudents = localStorage.getItem("studentsWithGrades")
-    const studentsDirectory = localStorage.getItem("studentsData")
-    try {
-      let normalized: Student[] = []
+    let isActive = true
 
-      if (savedStudents) {
-        const parsed = JSON.parse(savedStudents) as Partial<Student>[]
-        normalized = (Array.isArray(parsed) ? parsed : [])
-          .filter((student) => student && typeof student.id === "string" && typeof student.name === "string")
-          .map((student, index) => ({
-            id: student.id as string,
-            name: student.name as string,
-            class: normalizeClassLabel(student.class || "أول متوسط", index),
-            section: normalizeSectionLabel(student.section, index),
-            grades: Array.isArray(student.grades)
-              ? student.grades.map((grade) => ({
-                  subject: grade.subject || "الرياضيات",
-                  grade: Number(grade.grade) || 0,
-                  date: grade.date || new Date().toISOString().split("T")[0],
-                  examType: grade.examType || "فصلي أول",
-                }))
-              : [],
-          }))
+    void (async () => {
+      try {
+        const response = await fetchGradesData()
+        if (!isActive) return
+        setStudents(response.students)
+      } catch (error) {
+        if (!isActive) return
+        toast({
+          title: "تعذر تحميل الدرجات",
+          description: error instanceof Error ? error.message : "تم استخدام البيانات الحالية مؤقتًا",
+          variant: "destructive",
+        })
       }
+    })()
 
-      const byId = new Map(normalized.map((student) => [student.id, student]))
-      const byName = new Map(normalized.map((student) => [normalizeText(student.name), student]))
-
-      if (studentsDirectory) {
-        const parsedDirectory = JSON.parse(studentsDirectory) as DirectoryStudent[]
-        if (Array.isArray(parsedDirectory)) {
-          parsedDirectory.forEach((dirStudent, index) => {
-            if (!dirStudent?.name) return
-            const dirId = (dirStudent.id || `dir-${index + 1}`).toString()
-            const dirName = normalizeText(dirStudent.name)
-            const existing = byId.get(dirId) || byName.get(dirName)
-
-            if (existing) {
-              const updated: Student = {
-                ...existing,
-                class: classFromDirectory(dirStudent.grade, dirStudent.classroom, index),
-                section: sectionFromClassroom(dirStudent.classroom, index),
-              }
-              byId.set(updated.id, updated)
-              byName.set(normalizeText(updated.name), updated)
-              return
-            }
-
-            const created: Student = {
-              id: dirId,
-              name: dirStudent.name,
-              class: classFromDirectory(dirStudent.grade, dirStudent.classroom, index),
-              section: sectionFromClassroom(dirStudent.classroom, index),
-              grades: [],
-            }
-            byId.set(created.id, created)
-            byName.set(normalizeText(created.name), created)
-          })
-        }
-      }
-
-      const merged = Array.from(byId.values())
-      if (merged.length > 0) {
-        setStudents(merged)
-        localStorage.setItem("studentsWithGrades", JSON.stringify(merged))
-        return
-      }
-    } catch {
-      // fallback to defaults
+    return () => {
+      isActive = false
     }
+  }, [toast])
 
-    setStudents(DEFAULT_STUDENTS)
-    localStorage.setItem("studentsWithGrades", JSON.stringify(DEFAULT_STUDENTS))
-  }, [])
+  const persistGrades = async (nextStudents: Student[]) => {
+    const previousStudents = students
+    setStudents(nextStudents)
+    setIsSaving(true)
 
-  // Save students to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem("studentsWithGrades", JSON.stringify(students))
-  }, [students])
+    try {
+      const response = await saveGradesData(nextStudents)
+      setStudents(response.students)
+      return true
+    } catch (error) {
+      setStudents(previousStudents)
+      toast({
+        title: "تعذر حفظ الدرجات",
+        description: error instanceof Error ? error.message : "حدث خطأ أثناء حفظ الدرجات",
+        variant: "destructive",
+      })
+      return false
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   const matchedStudentName = (email && studentEmailToName[email]) || userName || ""
   const studentScoped = students.filter((student) => student.name === matchedStudentName)
@@ -289,7 +127,7 @@ export default function GradesPage() {
   const subjectsFromScope = Array.from(new Set(scopedStudents.flatMap((student) => student.grades.map((grade) => grade.subject))))
   const subjects = Array.from(new Set([...ALL_SUBJECTS, ...subjectsFromScope]))
 
-  const handleAddGrade = () => {
+  const handleAddGrade = async () => {
     const normalizedInput = normalizeText(studentSearchText)
     const exactMatch = normalizedInput
       ? students.find((student) => normalizeText(student.name) === normalizedInput)
@@ -351,8 +189,8 @@ export default function GradesPage() {
       return student
     })
 
-    setStudents(updatedStudents)
-    localStorage.setItem("studentsWithGrades", JSON.stringify(updatedStudents))
+    const saveSucceeded = await persistGrades(updatedStudents)
+    if (!saveSucceeded) return
 
     setNewGrade({
       studentId: "",
@@ -529,7 +367,7 @@ export default function GradesPage() {
                 <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                   إلغاء
                 </Button>
-                <Button onClick={handleAddGrade}>حفظ</Button>
+                <Button onClick={handleAddGrade} disabled={isSaving}>حفظ</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>}

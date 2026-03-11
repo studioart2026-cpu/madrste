@@ -34,18 +34,12 @@ import {
 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { ScrollArea } from "@/components/ui/scroll-area"
-
-interface Note {
-  id: string
-  title: string
-  content: string
-  date: string
-  images: string[]
-}
+import { fetchNotesData, saveNotesData } from "@/lib/school-api"
+import { defaultSchoolNotes, type SchoolNote } from "@/lib/school-data"
 
 export default function NotesPage() {
   const { toast } = useToast()
-  const [notes, setNotes] = useState<Note[]>([])
+  const [notes, setNotes] = useState<SchoolNote[]>(defaultSchoolNotes)
   const [searchQuery, setSearchQuery] = useState("")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -54,7 +48,7 @@ export default function NotesPage() {
     content: "",
     images: [] as string[],
   })
-  const [editingNote, setEditingNote] = useState<Note | null>(null)
+  const [editingNote, setEditingNote] = useState<SchoolNote | null>(null)
 
   // إضافة حالة لمعاينة الصور
   const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false)
@@ -62,73 +56,56 @@ export default function NotesPage() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [imageZoom, setImageZoom] = useState(1)
   const [imageRotation, setImageRotation] = useState(0)
+  const [isSaving, setIsSaving] = useState(false)
 
-  // Load notes from localStorage on component mount
   useEffect(() => {
-    const savedNotes = localStorage.getItem("notes")
-    if (savedNotes) {
+    let isMounted = true
+
+    const loadNotes = async () => {
       try {
-        const parsedNotes = JSON.parse(savedNotes)
-
-        // تحويل الملاحظات القديمة التي تحتوي على صورة واحدة إلى التنسيق الجديد
-        const migratedNotes = parsedNotes.map((note: any) => {
-          if (note.image && !note.images) {
-            return {
-              ...note,
-              images: note.image ? [note.image] : [],
-              image: undefined,
-            }
-          }
-          if (!note.images) {
-            return {
-              ...note,
-              images: [],
-            }
-          }
-          return note
-        })
-
-        setNotes(migratedNotes)
-      } catch (error) {
-        console.error("Error parsing saved notes:", error)
-        setNotes([])
+        const response = await fetchNotesData()
+        if (!isMounted) {
+          return
+        }
+        setNotes(Array.isArray(response.notes) && response.notes.length > 0 ? response.notes : defaultSchoolNotes)
+      } catch {
+        if (!isMounted) {
+          return
+        }
+        setNotes(defaultSchoolNotes)
       }
-    } else {
-      // Initialize with sample data only if no saved data exists
-      const initialNotes: Note[] = [
-        {
-          id: "1",
-          title: "اجتماع فريق العمل",
-          content: "مناقشة خطة العمل للربع القادم وتوزيع المهام.",
-          date: "2023-09-15",
-          images: [],
-        },
-        {
-          id: "2",
-          title: "مراجعة الميزانية",
-          content: "تحليل المصروفات والإيرادات وتحديد فرص التوفير.",
-          date: "2023-09-14",
-          images: [],
-        },
-        {
-          id: "3",
-          title: "تطوير المناهج",
-          content: "تحديث المناهج الدراسية لتواكب التطورات الحديثة في التعليم.",
-          date: "2023-09-13",
-          images: [],
-        },
-      ]
-      setNotes(initialNotes)
-      localStorage.setItem("notes", JSON.stringify(initialNotes))
+    }
+
+    void loadNotes()
+
+    return () => {
+      isMounted = false
     }
   }, [])
 
-  // Save notes to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem("notes", JSON.stringify(notes))
-  }, [notes])
-
   const filteredNotes = notes.filter((note) => note.title.includes(searchQuery) || note.content.includes(searchQuery))
+
+  const persistNotes = async (nextNotes: SchoolNote[]) => {
+    const previousNotes = notes
+    setNotes(nextNotes)
+    setIsSaving(true)
+
+    try {
+      const response = await saveNotesData(nextNotes)
+      setNotes(response.notes)
+      return true
+    } catch (error) {
+      setNotes(previousNotes)
+      toast({
+        title: "تعذر حفظ الملاحظات",
+        description: error instanceof Error ? error.message : "حدث خطأ أثناء حفظ الملاحظات",
+        variant: "destructive",
+      })
+      return false
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   const convertToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -207,7 +184,7 @@ export default function NotesPage() {
     })
   }
 
-  const handleAddNote = () => {
+  const handleAddNote = async () => {
     if (!newNote.title || !newNote.content) {
       toast({
         title: "خطأ",
@@ -228,8 +205,10 @@ export default function NotesPage() {
     }
 
     const updatedNotes = [...notes, noteToAdd]
-    setNotes(updatedNotes)
-    localStorage.setItem("notes", JSON.stringify(updatedNotes))
+    const saved = await persistNotes(updatedNotes)
+    if (!saved) {
+      return
+    }
 
     setNewNote({
       title: "",
@@ -244,13 +223,14 @@ export default function NotesPage() {
     })
   }
 
-  const handleEditNote = () => {
+  const handleEditNote = async () => {
     if (!editingNote) return
 
     const updatedNotes = notes.map((note) => (note.id === editingNote.id ? editingNote : note))
-
-    setNotes(updatedNotes)
-    localStorage.setItem("notes", JSON.stringify(updatedNotes))
+    const saved = await persistNotes(updatedNotes)
+    if (!saved) {
+      return
+    }
 
     setIsEditDialogOpen(false)
     setEditingNote(null)
@@ -261,12 +241,13 @@ export default function NotesPage() {
     })
   }
 
-  const handleDeleteNote = (id: string) => {
+  const handleDeleteNote = async (id: string) => {
     const noteToDelete = notes.find((note) => note.id === id)
     const updatedNotes = notes.filter((note) => note.id !== id)
-
-    setNotes(updatedNotes)
-    localStorage.setItem("notes", JSON.stringify(updatedNotes))
+    const saved = await persistNotes(updatedNotes)
+    if (!saved) {
+      return
+    }
 
     toast({
       title: "تم حذف الملاحظة",
@@ -414,7 +395,7 @@ export default function NotesPage() {
                 <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                   إلغاء
                 </Button>
-                <Button onClick={handleAddNote}>حفظ</Button>
+                <Button onClick={() => void handleAddNote()} disabled={isSaving}>حفظ</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -443,7 +424,7 @@ export default function NotesPage() {
                       <Pencil className="mr-2 h-4 w-4" />
                       تعديل
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteNote(note.id)}>
+                    <DropdownMenuItem className="text-red-600" onClick={() => void handleDeleteNote(note.id)}>
                       <Trash className="mr-2 h-4 w-4" />
                       حذف
                     </DropdownMenuItem>
@@ -571,7 +552,7 @@ export default function NotesPage() {
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
               إلغاء
             </Button>
-            <Button onClick={handleEditNote}>حفظ</Button>
+            <Button onClick={() => void handleEditNote()} disabled={isSaving}>حفظ</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

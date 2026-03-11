@@ -7,43 +7,13 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { FileDown, Printer } from "lucide-react"
+import { FileDown, Printer, Search } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
 import { useToast } from "@/hooks/use-toast"
+import { fetchReportData } from "@/lib/school-api"
+import { ALL_SUBJECTS, buildReportProfiles, type StudentReportProfile } from "@/lib/school-data"
 
-interface StudentProfile {
-  id: string
-  name: string
-  className: string
-  term: "الترم الأول" | "الترم الثاني"
-  grades: Array<{ subject: string; score: number }>
-  attendance: Array<{ date: string; status: "حاضر" | "غائب" | "متأخر" }>
-}
-
-const ALL_SUBJECTS = [
-  "الرياضيات",
-  "العلوم",
-  "اللغة العربية",
-  "اللغة الإنجليزية",
-  "التربية الإسلامية",
-  "الاجتماعيات",
-  "الحاسب",
-  "التربية الفنية",
-  "التربية البدنية",
-]
-
-const STUDENT_DIRECTORY: Array<{ id: string; name: string; className: string }> = [
-  { id: "1", name: "سارة أحمد", className: "الصف الأول" },
-  { id: "2", name: "نورة محمد", className: "الصف الثاني" },
-  { id: "3", name: "هند خالد", className: "الصف الثالث" },
-  { id: "4", name: "ريم سعد", className: "الصف الأول" },
-  { id: "5", name: "لمى عبدالله", className: "الصف الثاني" },
-  { id: "6", name: "دانة فهد", className: "الصف الثالث" },
-  { id: "7", name: "غادة سلطان", className: "الصف الأول" },
-  { id: "8", name: "منيرة خالد", className: "الصف الثاني" },
-  { id: "9", name: "جواهر محمد", className: "الصف الثالث" },
-  { id: "10", name: "العنود سعد", className: "الصف الأول" },
-]
+type StudentProfile = StudentReportProfile
 
 const studentProfiles: StudentProfile[] = [
   {
@@ -107,6 +77,8 @@ const studentEmailToName: Record<string, string> = {
   "student2@example.com": "نورة محمد",
 }
 
+const normalizeText = (value: string) => value.replace(/\s+/g, " ").trim()
+
 function getStatusVariant(status: "حاضر" | "غائب" | "متأخر"): "default" | "destructive" | "outline" {
   if (status === "غائب") return "destructive"
   if (status === "متأخر") return "outline"
@@ -119,75 +91,75 @@ export default function ReportsPage() {
   const isStudent = userType === "student"
   const reportRef = useRef<HTMLDivElement | null>(null)
   const [isExporting, setIsExporting] = useState(false)
-
-  const inferredStudentName = (email && studentEmailToName[email]) || userName || ""
-  const defaultStudent = studentProfiles.find((s) => s.name === inferredStudentName) || studentProfiles[0]
-
-  const [selectedStudentId, setSelectedStudentId] = useState(defaultStudent.id)
   const [selectedTerm, setSelectedTerm] = useState<"الترم الأول" | "الترم الثاني">("الترم الأول")
+  const [selectedStudentId, setSelectedStudentId] = useState("")
   const [studentSearchQuery, setStudentSearchQuery] = useState("")
   const [reportProfiles, setReportProfiles] = useState<StudentProfile[]>(studentProfiles)
 
+  const inferredStudentName = (email && studentEmailToName[email]) || userName || ""
+  const normalizedAccountStudentName = normalizeText(inferredStudentName)
+
   useEffect(() => {
-    const merged = new Map<string, StudentProfile>()
+    let isActive = true
 
-    studentProfiles.forEach((profile) => {
-      merged.set(`${profile.id}-${profile.term}`, profile)
-    })
+    void (async () => {
+      try {
+        const response = await fetchReportData()
+        if (!isActive) return
 
-    try {
-      const raw = localStorage.getItem("studentsWithGrades")
-      if (raw) {
-        const parsed = JSON.parse(raw) as Array<{
-          id?: string
-          name?: string
-          class?: string
-          grades?: Array<{ subject?: string; grade?: number }>
-        }>
+        const builtProfiles = buildReportProfiles({
+          students: response.students,
+          gradeStudents: response.gradeStudents,
+          attendanceRecords: response.attendanceRecords,
+        })
 
-        if (Array.isArray(parsed)) {
-          parsed.forEach((student, index) => {
-            if (!student?.name) return
-            const id = student.id || `ls-${index + 1}`
-            const profileKey = `${id}-الترم الأول`
-            if (!merged.has(profileKey)) {
-              merged.set(profileKey, {
-                id,
-                name: student.name,
-                className: student.class || "الصف الأول",
-                term: "الترم الأول",
-                grades: Array.isArray(student.grades)
-                  ? student.grades.map((g) => ({
-                      subject: g.subject || "الرياضيات",
-                      score: Number(g.grade) || 0,
-                    }))
-                  : [],
-                attendance: [],
-              })
-            }
-          })
+        if (builtProfiles.length > 0) {
+          setReportProfiles(builtProfiles)
+          return
         }
-      }
-    } catch {
-      // ignore malformed local storage and continue with defaults
-    }
-
-    STUDENT_DIRECTORY.forEach((student) => {
-      const key = `${student.id}-الترم الأول`
-      if (!merged.has(key)) {
-        merged.set(key, {
-          id: student.id,
-          name: student.name,
-          className: student.className,
-          term: "الترم الأول",
-          grades: [],
-          attendance: [],
+      } catch (error) {
+        if (!isActive) return
+        toast({
+          title: "تعذر تحميل التقارير",
+          description: error instanceof Error ? error.message : "تم استخدام البيانات الحالية مؤقتًا",
+          variant: "destructive",
         })
       }
-    })
 
-    setReportProfiles(Array.from(merged.values()))
-  }, [])
+      if (isActive) {
+        setReportProfiles(studentProfiles)
+      }
+    })()
+
+    return () => {
+      isActive = false
+    }
+  }, [email, inferredStudentName, isStudent, normalizedAccountStudentName])
+
+  const accountStudentProfiles = useMemo(() => {
+    if (!isStudent || !normalizedAccountStudentName) return []
+    return reportProfiles.filter((student) => normalizeText(student.name) === normalizedAccountStudentName)
+  }, [isStudent, normalizedAccountStudentName, reportProfiles])
+
+  const defaultStudent = useMemo(() => {
+    const fallbackName = inferredStudentName || "حساب الطالبة"
+
+    if (isStudent) {
+      return (
+        accountStudentProfiles.find((student) => student.term === selectedTerm) ||
+        accountStudentProfiles[0] || {
+          id: email || `current-student-${normalizeText(fallbackName) || "student"}`,
+          name: fallbackName,
+          className: "الصف الأول",
+          term: selectedTerm,
+          grades: [],
+          attendance: [],
+        }
+      )
+    }
+
+    return reportProfiles.find((student) => student.term === selectedTerm) || reportProfiles[0]
+  }, [accountStudentProfiles, email, inferredStudentName, isStudent, reportProfiles, selectedTerm])
 
   const visibleStudents = useMemo(() => {
     const byTerm = reportProfiles.filter((s) => s.term === selectedTerm)
@@ -209,12 +181,18 @@ export default function ReportsPage() {
   }, [isStudent, defaultStudent, reportProfiles])
 
   useEffect(() => {
-    if (isStudent) return
+    if (isStudent) {
+      if (selectedStudentId !== defaultStudent.id) {
+        setSelectedStudentId(defaultStudent.id)
+      }
+      return
+    }
+
     const hasSelected = allSelectableStudents.some((student) => student.id === selectedStudentId)
     if (!hasSelected && allSelectableStudents.length > 0) {
       setSelectedStudentId(allSelectableStudents[0].id)
     }
-  }, [isStudent, selectedStudentId, allSelectableStudents])
+  }, [allSelectableStudents, defaultStudent.id, isStudent, selectedStudentId])
 
   const selectedStudent = useMemo(() => {
     if (isStudent) return visibleStudents[0] || defaultStudent
@@ -223,10 +201,32 @@ export default function ReportsPage() {
   }, [isStudent, selectedStudentId, visibleStudents, selectedTerm, allSelectableStudents, defaultStudent, reportProfiles])
 
   const searchedStudents = useMemo(() => {
-    const query = studentSearchQuery.trim()
+    const query = normalizeText(studentSearchQuery)
     if (!query) return allSelectableStudents
-    return allSelectableStudents.filter((student) => student.name.includes(query))
+    return allSelectableStudents.filter((student) => normalizeText(student.name).includes(query))
   }, [allSelectableStudents, studentSearchQuery])
+
+  const handleStudentSearch = () => {
+    const query = normalizeText(studentSearchQuery)
+
+    if (!query) {
+      if (allSelectableStudents.length > 0) {
+        setSelectedStudentId(allSelectableStudents[0].id)
+      }
+      return
+    }
+
+    if (searchedStudents.length === 0) {
+      toast({
+        title: "لا توجد نتائج",
+        description: "لم يتم العثور على طالبة بهذا الاسم.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setSelectedStudentId(searchedStudents[0].id)
+  }
 
   const termFilteredAttendance = selectedStudent.attendance
   const total = termFilteredAttendance.length
@@ -411,11 +411,23 @@ export default function ReportsPage() {
             <>
               <div>
                 <label className="text-sm mb-2 block">بحث بالاسم</label>
-                <Input
-                  placeholder="اكتب اسم الطالبة"
-                  value={studentSearchQuery}
-                  onChange={(e) => setStudentSearchQuery(e.target.value)}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="اكتب اسم الطالبة"
+                    value={studentSearchQuery}
+                    onChange={(e) => setStudentSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        handleStudentSearch()
+                      }
+                    }}
+                  />
+                  <Button type="button" variant="outline" onClick={handleStudentSearch}>
+                    <Search className="ml-2 h-4 w-4" />
+                    بحث
+                  </Button>
+                </div>
               </div>
               <div>
               <label className="text-sm mb-2 block">الطالبة</label>

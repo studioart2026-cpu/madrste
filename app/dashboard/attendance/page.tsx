@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -21,7 +21,7 @@ import {
   BarChart3,
 } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { format, subDays } from "date-fns"
+import { format } from "date-fns"
 import { ar } from "date-fns/locale"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -36,6 +36,9 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/components/auth-provider"
+import { fetchAttendanceData, saveAttendanceRecords as saveAttendanceRecordsData } from "@/lib/school-api"
+import { defaultAttendanceRecords, type AttendanceRecord, type SchoolStudentSummary } from "@/lib/school-data"
+import { defaultClassrooms, mergeWithDefaultStudentRoster } from "@/lib/student-roster"
 
 // Define student type
 interface Student {
@@ -51,16 +54,15 @@ interface SchoolStudent {
   classroom: string
 }
 
-// Define attendance record type
-interface AttendanceRecord {
-  id: number
-  date: string
-  class: string
-  students: Student[]
-  savedAt?: string
-}
-
 const normalizeText = (value: string) => value.replace(/\s+/g, " ").trim()
+
+const mapToSchoolStudents = (students: SchoolStudentSummary[]): SchoolStudent[] =>
+  students
+    .map((student) => ({
+      id: student.id,
+      name: student.name,
+      classroom: student.classroom,
+    }))
 
 export default function AttendancePage() {
   const { userType, email, userName } = useAuth()
@@ -75,7 +77,17 @@ export default function AttendancePage() {
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [searchTerm, setSearchTerm] = useState("")
-  const [schoolStudents, setSchoolStudents] = useState<SchoolStudent[]>([])
+  const [schoolStudents, setSchoolStudents] = useState<SchoolStudent[]>(
+    mapToSchoolStudents(
+      mergeWithDefaultStudentRoster().map((student) => ({
+        id: student.id,
+        name: student.name,
+        classroom: student.classroom,
+      })),
+    ),
+  )
+  const [hasLoadedFromServer, setHasLoadedFromServer] = useState(false)
+  const hasInitializedPersistence = useRef(false)
 
   const studentEmailToName: Record<string, string> = {
     "student@example.com": "سارة أحمد",
@@ -84,89 +96,59 @@ export default function AttendancePage() {
   const inferredStudentName = normalizeText(userName || (email ? studentEmailToName[email] || "" : ""))
 
   // Dummy data for attendance records
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([
-    {
-      id: 1,
-      date: format(new Date(), "yyyy-MM-dd"),
-      class: "١/١",
-      students: [
-        { id: 1, name: "سارة أحمد", status: "present" },
-        { id: 2, name: "نورة محمد", status: "present" },
-        { id: 3, name: "هند خالد", status: "absent", notes: "مرض" },
-        { id: 4, name: "ريم عبدالله", status: "present" },
-        { id: 5, name: "لمى سعد", status: "present" },
-        { id: 6, name: "دانة فهد", status: "absent", notes: "ظروف عائلية" },
-        { id: 7, name: "منى علي", status: "late", notes: "تأخرت 15 دقيقة" },
-        { id: 8, name: "جواهر سلطان", status: "excused", notes: "إذن طبي" },
-      ],
-      savedAt: "2025-05-16T08:30:00",
-    },
-    {
-      id: 2,
-      date: format(subDays(new Date(), 1), "yyyy-MM-dd"),
-      class: "١/١",
-      students: [
-        { id: 1, name: "سارة أحمد", status: "present" },
-        { id: 2, name: "نورة محمد", status: "present" },
-        { id: 3, name: "هند خالد", status: "present" },
-        { id: 4, name: "ريم عبدالله", status: "present" },
-        { id: 5, name: "لمى سعد", status: "absent", notes: "مرض" },
-        { id: 6, name: "دانة فهد", status: "present" },
-        { id: 7, name: "منى علي", status: "present" },
-        { id: 8, name: "جواهر سلطان", status: "present" },
-      ],
-      savedAt: "2025-05-15T08:45:00",
-    },
-  ])
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(defaultAttendanceRecords)
 
   // Current attendance record based on selected date and class
   const [currentRecord, setCurrentRecord] = useState<AttendanceRecord | null>(null)
 
   useEffect(() => {
-    try {
-      const rawStudents = localStorage.getItem("studentsData")
-      if (rawStudents) {
-        const parsed = JSON.parse(rawStudents) as Array<{ id?: string; name?: string; classroom?: string }>
-        if (Array.isArray(parsed)) {
-          const mapped = parsed
-            .filter((student) => student?.name && student?.classroom)
-            .map((student, index) => ({
-              id: student.id || `student-${index + 1}`,
-              name: student.name as string,
-              classroom: student.classroom as string,
-            }))
-          if (mapped.length > 0) setSchoolStudents(mapped)
-        }
-      }
-    } catch {
-      // ignore invalid local data
-    }
+    let isActive = true
 
-    try {
-      const rawRecords = localStorage.getItem("attendanceRecords")
-      if (rawRecords) {
-        const parsed = JSON.parse(rawRecords) as AttendanceRecord[]
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setAttendanceRecords(parsed)
+    void (async () => {
+      try {
+        const response = await fetchAttendanceData()
+        if (!isActive) return
+        setSchoolStudents(mapToSchoolStudents(response.students))
+        setAttendanceRecords(response.attendanceRecords)
+      } catch (error) {
+        if (!isActive) return
+        toast({
+          title: "تعذر تحميل بيانات الحضور",
+          description: error instanceof Error ? error.message : "تم استخدام البيانات الحالية مؤقتًا",
+          variant: "destructive",
+        })
+      } finally {
+        if (isActive) {
+          setHasLoadedFromServer(true)
         }
       }
-    } catch {
-      // ignore invalid local data
+    })()
+
+    return () => {
+      isActive = false
     }
   }, [])
 
   useEffect(() => {
-    try {
-      localStorage.setItem("attendanceRecords", JSON.stringify(attendanceRecords))
-    } catch {
-      // ignore write failures
+    if (!hasLoadedFromServer) return
+    if (!hasInitializedPersistence.current) {
+      hasInitializedPersistence.current = true
+      return
     }
-  }, [attendanceRecords])
+
+    void saveAttendanceRecordsData(attendanceRecords).catch((error) => {
+      toast({
+        title: "تعذر حفظ سجل الحضور",
+        description: error instanceof Error ? error.message : "حدث خطأ أثناء حفظ التعديلات",
+        variant: "destructive",
+      })
+    })
+  }, [attendanceRecords, hasLoadedFromServer, toast])
 
   const classOptions = useMemo(() => {
     const classes = Array.from(new Set(schoolStudents.map((student) => student.classroom)))
     if (classes.length > 0) return classes.sort((a, b) => a.localeCompare(b, "ar"))
-    return ["١/١", "١/٢", "١/٣", "٢/١", "٢/٢", "٢/٣", "٣/١", "٣/٢", "٣/٣"]
+    return defaultClassrooms
   }, [schoolStudents])
 
   const studentProfile = useMemo(() => {

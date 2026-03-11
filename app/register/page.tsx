@@ -29,7 +29,7 @@ export default function RegisterPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
-  const { registerWithVerification } = useAuth()
+  const { registerWithVerification, isReady } = useAuth()
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -41,8 +41,13 @@ export default function RegisterPage() {
         throw new Error("كلمات المرور غير متطابقة")
       }
 
-      // استخدام الوظيفة المعدلة للتسجيل مع التحقق التلقائي
+      // إنشاء الحساب على الخادم ثم تحويل المستخدم إلى صفحة انتظار المراجعة
       await registerWithVerification(userType, name, email, password, phoneNumber)
+
+      toast({
+        title: "تم إنشاء الحساب",
+        description: "تم إرسال طلب التسجيل إلى الإدارة بانتظار التفعيل.",
+      })
 
       // توجيه المستخدم مباشرة إلى صفحة انتظار الموافقة
       router.push("/pending-approval")
@@ -82,13 +87,13 @@ export default function RegisterPage() {
                   <div className="w-10 h-10 rounded-full bg-[#0a8a74] text-white flex items-center justify-center">
                     <span>٢</span>
                   </div>
-                  <span className="mr-3 text-gray-700">تحقق من بريدك الإلكتروني</span>
+                  <span className="mr-3 text-gray-700">أرسل طلب التسجيل للإدارة</span>
                 </div>
                 <div className="flex items-center">
                   <div className="w-10 h-10 rounded-full bg-[#0a8a74] text-white flex items-center justify-center">
                     <span>٣</span>
                   </div>
-                  <span className="mr-3 text-gray-700">انتظر موافقة الإدارة على حسابك</span>
+                  <span className="mr-3 text-gray-700">انتظر مراجعة الإدارة وتفعيل الحساب</span>
                 </div>
               </div>
             </div>
@@ -224,7 +229,7 @@ export default function RegisterPage() {
                   <Button
                     type="submit"
                     className="w-full h-12 text-lg mt-4 bg-[#0a8a74] hover:bg-[#097a67]"
-                    disabled={isLoading}
+                    disabled={isLoading || !isReady}
                   >
                     {isLoading ? (
                       <span className="flex items-center justify-center">

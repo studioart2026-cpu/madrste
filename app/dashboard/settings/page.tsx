@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -13,7 +13,10 @@ import { useAuth } from "@/components/auth-provider"
 import { BellRing, Lock, Save, User, UserCheck, UserX, Shield, Users } from "lucide-react"
 import { useTheme } from "@/components/theme-provider"
 import { useToast } from "@/hooks/use-toast"
-import { usersStore } from "@/lib/users-store"
+import { NOTIFICATION_SOUND_ENABLED_KEY } from "@/lib/notification-sound"
+import { fetchStudents, saveStudents } from "@/lib/school-api"
+import type { RegistrationRequest } from "@/lib/auth-types"
+import type { ManagedStudent } from "@/lib/student-roster"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -27,24 +30,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
-// نموذج بيانات طلب التسجيل
-interface RegistrationRequest {
-  id: string
-  name: string
-  email: string
-  userType: "teacher" | "student"
-  phoneNumber: string
-  date: string
-  status: "pending" | "approved" | "rejected"
-}
-
-const addApprovedStudentToDirectory = (request: RegistrationRequest) => {
+const addApprovedStudentToDirectory = async (request: RegistrationRequest) => {
   if (request.userType !== "student") return
 
   try {
-    const raw = localStorage.getItem("studentsData")
-    const existing = raw ? (JSON.parse(raw) as Array<Record<string, unknown>>) : []
-    const students = Array.isArray(existing) ? existing : []
+    const response = await fetchStudents()
+    const students = Array.isArray(response.students) ? response.students : []
 
     const normalizedName = request.name.trim()
     const normalizedPhone = (request.phoneNumber || "").replace(/\D/g, "")
@@ -88,59 +79,30 @@ const addApprovedStudentToDirectory = (request: RegistrationRequest) => {
       lastLogin: new Date().toISOString().split("T")[0],
       activities: [],
       notes: "تمت إضافتها تلقائيًا بعد الموافقة على التسجيل",
-    })
+    } satisfies ManagedStudent)
 
-    localStorage.setItem("studentsData", JSON.stringify(students))
+    await saveStudents(students)
   } catch {
-    // ignore local storage failures
+    // ignore sync failures here and allow approval flow to continue
   }
 }
 
-// بيانات تجريبية لطلبات التسجيل
-const initialRequests: RegistrationRequest[] = [
-  {
-    id: "1",
-    name: "نورة محمد",
-    email: "noura@example.com",
-    userType: "teacher",
-    phoneNumber: "0501234567",
-    date: "2023-05-10",
-    status: "pending",
-  },
-  {
-    id: "2",
-    name: "سارة أحمد",
-    email: "sara@example.com",
-    userType: "student",
-    phoneNumber: "0551234567",
-    date: "2023-05-11",
-    status: "pending",
-  },
-  {
-    id: "3",
-    name: "هند خالد",
-    email: "hind@example.com",
-    userType: "teacher",
-    phoneNumber: "0561234567",
-    date: "2023-05-09",
-    status: "pending",
-  },
-]
-
 export default function SettingsPage() {
-  const { userName, userType, email } = useAuth()
+  const { userName, userType, email, refreshSession, approveUser, rejectUser, isReady } = useAuth()
   const { theme, setTheme } = useTheme()
   const { toast } = useToast()
 
   const [name, setName] = useState(userName || "")
   const [userEmail, setUserEmail] = useState(email || "")
+  const [profileImage, setProfileImage] = useState<string | null>(null)
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [emailNotifications, setEmailNotifications] = useState(true)
+  const [notificationSoundEnabled, setNotificationSoundEnabled] = useState(true)
   const [fontSize, setFontSize] = useState("medium")
   const [language, setLanguage] = useState("ar")
 
   // حالة طلبات التسجيل
-  const [requests, setRequests] = useState<RegistrationRequest[]>(initialRequests)
+  const [requests, setRequests] = useState<RegistrationRequest[]>([])
   const [currentRequest, setCurrentRequest] = useState<RegistrationRequest | null>(null)
   const [approveDialogOpen, setApproveDialogOpen] = useState(false)
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
@@ -157,8 +119,56 @@ export default function SettingsPage() {
   const [principalPassword, setPrincipalPassword] = useState("")
   const [confirmPrincipalPassword, setConfirmPrincipalPassword] = useState("")
 
+  useEffect(() => {
+    setName(userName || "")
+    setUserEmail(email || "")
+  }, [email, userName])
+
+  useEffect(() => {
+    try {
+      if (email) {
+        const storedProfileImage = localStorage.getItem(`profile-image:${email}`)
+        setProfileImage(storedProfileImage || null)
+      }
+
+      const storedNotificationsEnabled = localStorage.getItem("notifications-enabled")
+      const storedEmailNotifications = localStorage.getItem("email-notifications-enabled")
+      const storedSoundNotifications = localStorage.getItem(NOTIFICATION_SOUND_ENABLED_KEY)
+
+      if (storedNotificationsEnabled !== null) {
+        setNotificationsEnabled(storedNotificationsEnabled === "true")
+      }
+
+      if (storedEmailNotifications !== null) {
+        setEmailNotifications(storedEmailNotifications === "true")
+      }
+
+      if (storedSoundNotifications !== null) {
+        setNotificationSoundEnabled(storedSoundNotifications === "true")
+      }
+    } catch {
+      // ignore storage load failures
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isReady || userType !== "admin") {
+      return
+    }
+
+    void loadRequests(true)
+  }, [isReady, userType])
+
   // حفظ الإعدادات
   const saveSettings = () => {
+    try {
+      localStorage.setItem("notifications-enabled", notificationsEnabled.toString())
+      localStorage.setItem("email-notifications-enabled", emailNotifications.toString())
+      localStorage.setItem(NOTIFICATION_SOUND_ENABLED_KEY, notificationSoundEnabled.toString())
+    } catch {
+      // ignore storage save failures
+    }
+
     toast({
       title: "تم حفظ الإعدادات",
       description: "تم حفظ إعدادات النظام بنجاح",
@@ -166,8 +176,81 @@ export default function SettingsPage() {
     })
   }
 
+  const loadRequests = async (silent = false) => {
+    try {
+      const response = await fetch("/api/admin/registration-requests", {
+        method: "GET",
+        credentials: "same-origin",
+        cache: "no-store",
+      })
+
+      const data = (await response.json()) as { requests?: RegistrationRequest[]; error?: string }
+      if (!response.ok || !data.requests) {
+        throw new Error(data.error || "تعذر تحميل طلبات التسجيل")
+      }
+
+      setRequests(data.requests)
+
+      if (!silent) {
+        toast({
+          title: "تم تحديث الطلبات",
+          description: "تم تحميل أحدث طلبات التسجيل",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "تعذر تحميل الطلبات",
+        description: error instanceof Error ? error.message : "حدث خطأ أثناء تحميل البيانات",
+        variant: "destructive",
+      })
+    }
+  }
+
   // حفظ إعدادات الحساب
-  const saveAccountSettings = () => {
+  const saveAccountSettings = async () => {
+    try {
+      const response = await fetch("/api/auth/profile", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          name,
+          email: userEmail,
+        }),
+      })
+
+      const data = (await response.json()) as { error?: string }
+      if (!response.ok) {
+        throw new Error(data.error || "تعذر تحديث معلومات الحساب")
+      }
+
+      if (email && email !== userEmail) {
+        const previousImage = localStorage.getItem(`profile-image:${email}`)
+        if (previousImage) {
+          localStorage.setItem(`profile-image:${userEmail}`, previousImage)
+          localStorage.removeItem(`profile-image:${email}`)
+        }
+      }
+
+      if (profileImage && userEmail) {
+        localStorage.setItem(`profile-image:${userEmail}`, profileImage)
+      } else if (userEmail) {
+        localStorage.removeItem(`profile-image:${userEmail}`)
+      }
+
+      await refreshSession()
+      window.dispatchEvent(new Event("profile-updated"))
+    } catch (error) {
+      toast({
+        title: "تعذر تحديث الحساب",
+        description: error instanceof Error ? error.message : "حدث خطأ أثناء حفظ معلومات الحساب",
+        variant: "destructive",
+      })
+      return
+    }
+
     toast({
       title: "تم حفظ معلومات الحساب",
       description: "تم تحديث معلومات الحساب بنجاح",
@@ -175,8 +258,29 @@ export default function SettingsPage() {
     })
   }
 
+  const handleProfileImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "ملف غير صالح",
+        description: "يرجى اختيار صورة فقط.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : null
+      setProfileImage(result)
+    }
+    reader.readAsDataURL(file)
+  }
+
   // تغيير كلمة المرور
-  const changePassword = () => {
+  const changePassword = async () => {
     if (!newPassword || newPassword.length < 8) {
       toast({
         title: "خطأ",
@@ -195,21 +299,27 @@ export default function SettingsPage() {
       return
     }
 
-    const isValidCurrent = usersStore.validateCredentials(userEmail, currentPassword)
-    if (!isValidCurrent) {
-      toast({
-        title: "خطأ",
-        description: "كلمة المرور الحالية غير صحيحة",
-        variant: "destructive",
+    try {
+      const response = await fetch("/api/auth/password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+        }),
       })
-      return
-    }
 
-    const updated = usersStore.updateUserPassword(userEmail, newPassword)
-    if (!updated) {
+      const data = (await response.json()) as { error?: string }
+      if (!response.ok) {
+        throw new Error(data.error || "تعذر تغيير كلمة المرور")
+      }
+    } catch (error) {
       toast({
         title: "خطأ",
-        description: "تعذر تغيير كلمة المرور",
+        description: error instanceof Error ? error.message : "تعذر تغيير كلمة المرور",
         variant: "destructive",
       })
       return
@@ -225,7 +335,7 @@ export default function SettingsPage() {
     })
   }
 
-  const changePrincipalPassword = () => {
+  const changePrincipalPassword = async () => {
     if (userType !== "admin") return
 
     if (!principalPassword || principalPassword.length < 8) {
@@ -246,29 +356,27 @@ export default function SettingsPage() {
       return
     }
 
-    const principalAccount = usersStore
-      .getUsers()
-      .find((user) => user.email === "principal@school.edu.sa" || user.userType === "vice_admin")
-
-    let updated = false
-    if (principalAccount) {
-      updated = usersStore.updateUserPassword(principalAccount.email, principalPassword)
-    } else {
-      usersStore.addUser({
-        name: "المديرة",
-        email: "principal@school.edu.sa",
-        password: principalPassword,
-        userType: "vice_admin",
-        phoneNumber: "",
-        isApproved: true,
+    try {
+      const response = await fetch("/api/auth/password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          targetEmail: "principal@school.edu.sa",
+          newPassword: principalPassword,
+        }),
       })
-      updated = true
-    }
 
-    if (!updated) {
+      const data = (await response.json()) as { error?: string }
+      if (!response.ok) {
+        throw new Error(data.error || "تعذر تغيير كلمة مرور المديرة")
+      }
+    } catch (error) {
       toast({
         title: "خطأ",
-        description: "تعذر تغيير كلمة مرور المديرة",
+        description: error instanceof Error ? error.message : "تعذر تغيير كلمة مرور المديرة",
         variant: "destructive",
       })
       return
@@ -292,36 +400,48 @@ export default function SettingsPage() {
   }
 
   // الموافقة على طلب التسجيل
-  const handleApproveRequest = () => {
+  const handleApproveRequest = async () => {
     if (!currentRequest) return
 
-    // تحديث حالة الطلب
-    setRequests(requests.map((req) => (req.id === currentRequest.id ? { ...req, status: "approved" as const } : req)))
-    addApprovedStudentToDirectory(currentRequest)
-
-    // إغلاق مربع الحوار وعرض رسالة نجاح
-    setApproveDialogOpen(false)
-    toast({
-      title: "تمت الموافقة بنجاح",
-      description: `تمت الموافقة على حساب ${currentRequest.name}`,
-      variant: "default",
-    })
+    try {
+      await approveUser(currentRequest.id)
+      await addApprovedStudentToDirectory(currentRequest)
+      setApproveDialogOpen(false)
+      toast({
+        title: "تمت الموافقة بنجاح",
+        description: `تمت الموافقة على حساب ${currentRequest.name}`,
+        variant: "default",
+      })
+      await loadRequests(true)
+    } catch (error) {
+      toast({
+        title: "حدث خطأ",
+        description: error instanceof Error ? error.message : "تعذر الموافقة على الطلب",
+        variant: "destructive",
+      })
+    }
   }
 
   // رفض طلب التسجيل
-  const handleRejectRequest = () => {
+  const handleRejectRequest = async () => {
     if (!currentRequest) return
 
-    // تحديث حالة الطلب
-    setRequests(requests.map((req) => (req.id === currentRequest.id ? { ...req, status: "rejected" as const } : req)))
-
-    // إغلاق مربع الحوار وعرض رسالة نجاح
-    setRejectDialogOpen(false)
-    toast({
-      title: "تم الرفض",
-      description: `تم رفض حساب ${currentRequest.name}`,
-      variant: "destructive",
-    })
+    try {
+      await rejectUser(currentRequest.id)
+      setRejectDialogOpen(false)
+      toast({
+        title: "تم الرفض",
+        description: `تم رفض حساب ${currentRequest.name}`,
+        variant: "destructive",
+      })
+      await loadRequests(true)
+    } catch (error) {
+      toast({
+        title: "حدث خطأ",
+        description: error instanceof Error ? error.message : "تعذر رفض الطلب",
+        variant: "destructive",
+      })
+    }
   }
 
   return (
@@ -351,6 +471,28 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
+                <Label htmlFor="profileImage">صورة الحساب</Label>
+                <div className="flex items-center gap-4">
+                  <div className="h-16 w-16 overflow-hidden rounded-full border bg-slate-50">
+                    {profileImage ? (
+                      <img src={profileImage} alt="صورة المستخدم" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                        بدون صورة
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <Input id="profileImage" type="file" accept="image/*" onChange={handleProfileImageChange} />
+                    {profileImage && (
+                      <Button type="button" variant="outline" size="sm" onClick={() => setProfileImage(null)}>
+                        حذف الصورة
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="name">الاسم</Label>
                 <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
               </div>
@@ -362,7 +504,15 @@ export default function SettingsPage() {
                 <Label htmlFor="userType">نوع المستخدم</Label>
                 <Input
                   id="userType"
-                  value={userType === "admin" ? "مدير النظام" : userType === "teacher" ? "معلم/ة" : "طالب/ة"}
+                  value={
+                    userType === "admin"
+                      ? "مدير النظام"
+                      : userType === "vice_admin"
+                        ? "وكيل/ة الإدارة"
+                        : userType === "teacher"
+                          ? "معلم/ة"
+                          : "طالب/ة"
+                  }
                   disabled
                 />
               </div>
@@ -458,6 +608,17 @@ export default function SettingsPage() {
                   <p className="text-sm text-muted-foreground">استلام الإشعارات عبر البريد الإلكتروني</p>
                 </div>
                 <Switch id="emailNotifications" checked={emailNotifications} onCheckedChange={setEmailNotifications} />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="notificationSoundEnabled">صوت الإشعارات</Label>
+                  <p className="text-sm text-muted-foreground">تشغيل نغمة هادئة عند وصول إشعار أو تحديث جديد</p>
+                </div>
+                <Switch
+                  id="notificationSoundEnabled"
+                  checked={notificationSoundEnabled}
+                  onCheckedChange={setNotificationSoundEnabled}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="notificationTypes">أنواع الإشعارات</Label>
