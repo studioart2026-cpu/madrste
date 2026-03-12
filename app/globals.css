@@ -1,0 +1,234 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 142 76% 36%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 150 80% 98%;
+    --secondary-foreground: 173 80% 19%;
+    --muted: 150 80% 98%;
+    --muted-foreground: 240 4% 46%;
+    --accent: 150 80% 98%;
+    --accent-foreground: 240 4% 46%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 142 76% 36%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 142 76% 36%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 142 76% 36%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-bold;
+  }
+  h1 {
+    @apply text-3xl;
+  }
+  h2 {
+    @apply text-2xl;
+  }
+  h3 {
+    @apply text-xl;
+  }
+}
+
+/* تحسينات للدعم العربي */
+body {
+  font-feature-settings: "calt" 1;
+  text-rendering: optimizeLegibility;
+}
+
+/* فرض اتجاه RTL بشكل متسق على جميع الصفحات العربية */
+html[dir="rtl"] body {
+  direction: rtl;
+  text-align: right;
+}
+
+/* تصحيح المحاذاة في مكونات الجداول التي تستخدم text-left */
+html[dir="rtl"] .text-left {
+  text-align: right !important;
+}
+
+/* جعل عرض الجداول يبدأ من اليمين في واجهة العربية */
+html[dir="rtl"] table {
+  direction: rtl;
+}
+
+html[dir="rtl"] th,
+html[dir="rtl"] td {
+  text-align: right;
+}
+
+/* إصلاح عرض حقول التاريخ داخل واجهة RTL */
+html[dir="rtl"] input[type="date"] {
+  direction: ltr;
+  text-align: left;
+}
+
+html[dir="rtl"] input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+}
+
+/* تحسين عرض الجداول في الاتجاه من اليمين إلى اليسار */
+.rtl-table th:first-child,
+.rtl-table td:first-child {
+  border-right: none;
+  border-left: 1px solid hsl(var(--border));
+}
+
+.rtl-table th:last-child,
+.rtl-table td:last-child {
+  border-left: none;
+  border-right: 1px solid hsl(var(--border));
+}
+
+/* تحسين عرض الأزرار والأيقونات */
+.icon-flip {
+  transform: scaleX(-1);
+}
+
+/* تحسين عرض القوائم المنسدلة */
+.rtl-dropdown {
+  right: auto;
+  left: 0;
+}
+
+/* تحسين عرض الإشعارات */
+.rtl-notification {
+  right: auto;
+  left: 1rem;
+}
+
+/* تحسينات إضافية للواجهة */
+.card-hover {
+  @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
+}
+
+.btn-primary {
+  @apply bg-primary text-primary-foreground hover:bg-primary/90 transition-colors;
+}
+
+.btn-secondary {
+  @apply bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors;
+}
+
+.nav-link {
+  @apply transition-colors hover:text-primary;
+}
+
+.dashboard-card {
+  @apply rounded-xl border border-border bg-card p-4 shadow-sm transition-all duration-300 hover:shadow-md;
+}
+
+/* تخصيص الألوان للتقارير والإحصائيات */
+@layer components {
+  .stat-card-attendance {
+    @apply bg-green-50 border-green-200;
+  }
+
+  .stat-card-grades {
+    @apply bg-emerald-50 border-emerald-200;
+  }
+
+  .stat-card-homework {
+    @apply bg-teal-50 border-teal-200;
+  }
+
+  .stat-card-performance {
+    @apply bg-green-50 border-green-200;
+  }
+
+  /* تخصيص ألوان المواد الدراسية */
+  .subject-arabic {
+    @apply bg-green-100 text-green-800;
+  }
+
+  .subject-math {
+    @apply bg-emerald-100 text-emerald-800;
+  }
+
+  .subject-science {
+    @apply bg-teal-100 text-teal-800;
+  }
+
+  .subject-islamic {
+    @apply bg-green-100 text-green-800;
+  }
+
+  .subject-social {
+    @apply bg-lime-100 text-lime-800;
+  }
+
+  .subject-english {
+    @apply bg-cyan-100 text-cyan-800;
+  }
+
+  .subject-computer {
+    @apply bg-sky-100 text-sky-800;
+  }
+
+  /* تخصيص ألوان الفصول */
+  .grade-1 {
+    @apply bg-green-50 border-green-200;
+  }
+
+  .grade-2 {
+    @apply bg-emerald-50 border-emerald-200;
+  }
+
+  .grade-3 {
+    @apply bg-teal-50 border-teal-200;
+  }
+
+  /* تحسينات للنماذج */
+  .form-input {
+    @apply rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+  }
+
+  .form-label {
+    @apply text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70;
+  }
+}
