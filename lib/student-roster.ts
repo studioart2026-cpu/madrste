@@ -23,299 +23,26 @@ export interface ManagedStudent {
   activities?: string[]
 }
 
-type ClassroomDefinition = {
-  grade: string
-  classroom: string
-  seededStudents?: ManagedStudent[]
-}
+export const defaultGrades = ["أول متوسط", "ثاني متوسط", "ثالث متوسط"]
 
-const classroomDefinitions: ClassroomDefinition[] = [
-  {
-    grade: "أول متوسط",
-    classroom: "١/١",
-    seededStudents: [
-      {
-        id: "1",
-        name: "سارة أحمد",
-        studentId: "10001",
-        grade: "أول متوسط",
-        classroom: "١/١",
-        parentPhone: "0501234567",
-        status: "نشط",
-        birthDate: "2013-05-15",
-        address: "الرياض، حي النزهة",
-        attendance: 95,
-        academicPerformance: 88,
-        behaviorRating: 92,
-        lastLogin: "2026-03-10",
-        parentEmail: "parent1@example.com",
-        emergencyContact: "0509876543",
-        activities: ["النادي العلمي", "القراءة"],
-        joinDate: "2024-08-18",
-      },
-      {
-        id: "10",
-        name: "العنود سعد",
-        studentId: "10010",
-        grade: "أول متوسط",
-        classroom: "١/١",
-        parentPhone: "0503344556",
-        status: "نشط",
-        birthDate: "2013-11-20",
-        address: "الرياض، حي الروضة",
-        attendance: 93,
-        academicPerformance: 87,
-        behaviorRating: 90,
-        lastLogin: "2026-03-09",
-        parentEmail: "parent10@example.com",
-        emergencyContact: "0509900112",
-        activities: ["الرسم", "الموسيقى"],
-        joinDate: "2024-08-18",
-      },
-    ],
-  },
-  { grade: "أول متوسط", classroom: "١/٢" },
-  { grade: "أول متوسط", classroom: "١/٣" },
-  { grade: "أول متوسط", classroom: "١/٤" },
-  {
-    grade: "ثاني متوسط",
-    classroom: "٢/١",
-    seededStudents: [
-      {
-        id: "5",
-        name: "لمى عبدالله",
-        studentId: "10005",
-        grade: "ثاني متوسط",
-        classroom: "٢/١",
-        parentPhone: "0571234567",
-        status: "نشط",
-        birthDate: "2012-07-18",
-        address: "الرياض، حي الربيع",
-        attendance: 97,
-        academicPerformance: 91,
-        behaviorRating: 93,
-        lastLogin: "2026-03-10",
-        parentEmail: "parent5@example.com",
-        emergencyContact: "0574455667",
-        activities: ["المسرح", "القراءة"],
-        joinDate: "2023-08-20",
-      },
-    ],
-  },
-  {
-    grade: "ثاني متوسط",
-    classroom: "٢/٢",
-    seededStudents: [
-      {
-        id: "8",
-        name: "منيرة خالد",
-        studentId: "10008",
-        grade: "ثاني متوسط",
-        classroom: "٢/٢",
-        parentPhone: "0501122334",
-        status: "نشط",
-        birthDate: "2012-10-30",
-        address: "الرياض، حي النخيل",
-        attendance: 94,
-        academicPerformance: 89,
-        behaviorRating: 91,
-        lastLogin: "2026-03-08",
-        parentEmail: "parent8@example.com",
-        emergencyContact: "0507788990",
-        medicalNotes: "نظارات طبية",
-        activities: ["القراءة", "الشطرنج"],
-        joinDate: "2023-08-20",
-      },
-    ],
-  },
-  {
-    grade: "ثاني متوسط",
-    classroom: "٢/٣",
-    seededStudents: [
-      {
-        id: "2",
-        name: "نورة محمد",
-        studentId: "10002",
-        grade: "ثاني متوسط",
-        classroom: "٢/٣",
-        parentPhone: "0507654321",
-        status: "نشط",
-        birthDate: "2012-03-22",
-        address: "الرياض، حي الملقا",
-        attendance: 98,
-        academicPerformance: 94,
-        behaviorRating: 90,
-        lastLogin: "2026-03-10",
-        parentEmail: "parent2@example.com",
-        emergencyContact: "0501122334",
-        activities: ["الرسم", "السباحة"],
-        joinDate: "2023-08-20",
-      },
-    ],
-  },
-  { grade: "ثاني متوسط", classroom: "٢/٤" },
-  { grade: "ثاني متوسط", classroom: "٢/٥" },
-  { grade: "ثاني متوسط", classroom: "٢/٦" },
-  {
-    grade: "ثالث متوسط",
-    classroom: "٣/١",
-    seededStudents: [
-      {
-        id: "6",
-        name: "دانة فهد",
-        studentId: "10006",
-        grade: "ثالث متوسط",
-        classroom: "٣/١",
-        parentPhone: "0581234567",
-        status: "نشط",
-        birthDate: "2011-04-12",
-        address: "الرياض، حي العليا",
-        attendance: 99,
-        academicPerformance: 96,
-        behaviorRating: 98,
-        lastLogin: "2026-03-10",
-        parentEmail: "parent6@example.com",
-        emergencyContact: "0585566778",
-        activities: ["البرمجة", "الروبوتات"],
-        joinDate: "2022-08-24",
-      },
-    ],
-  },
-  {
-    grade: "ثالث متوسط",
-    classroom: "٣/٢",
-    seededStudents: [
-      {
-        id: "3",
-        name: "هند خالد",
-        studentId: "10003",
-        grade: "ثالث متوسط",
-        classroom: "٣/٢",
-        parentPhone: "0551234567",
-        status: "نشط",
-        birthDate: "2011-11-10",
-        address: "الرياض، حي الياسمين",
-        attendance: 92,
-        academicPerformance: 85,
-        behaviorRating: 95,
-        lastLogin: "2026-03-08",
-        parentEmail: "parent3@example.com",
-        emergencyContact: "0552233445",
-        activities: ["القراءة", "كرة السلة"],
-        joinDate: "2022-08-24",
-      },
-    ],
-  },
-  {
-    grade: "ثالث متوسط",
-    classroom: "٣/٣",
-    seededStudents: [
-      {
-        id: "9",
-        name: "جواهر محمد",
-        studentId: "10009",
-        grade: "ثالث متوسط",
-        classroom: "٣/٣",
-        parentPhone: "0502233445",
-        status: "نشط",
-        birthDate: "2011-08-14",
-        address: "الرياض، حي الملز",
-        attendance: 96,
-        academicPerformance: 93,
-        behaviorRating: 94,
-        lastLogin: "2026-03-10",
-        parentEmail: "parent9@example.com",
-        emergencyContact: "0508899001",
-        activities: ["السباحة", "كرة القدم"],
-        joinDate: "2022-08-24",
-      },
-    ],
-  },
-  { grade: "ثالث متوسط", classroom: "٣/٤" },
-  { grade: "ثالث متوسط", classroom: "٣/٥" },
+export const defaultClassrooms = [
+  "١/١",
+  "١/٢",
+  "١/٣",
+  "١/٤",
+  "١/٥",
+  "٢/١",
+  "٢/٢",
+  "٢/٣",
+  "٢/٤",
+  "٢/٥",
+  "٢/٦",
+  "٣/١",
+  "٣/٢",
+  "٣/٣",
+  "٣/٤",
+  "٣/٥",
 ]
-
-const targetStudentsPerClassroom = 8
-const firstNames = [
-  "رهف",
-  "جود",
-  "ليان",
-  "تالا",
-  "شهد",
-  "لولوة",
-  "ريماس",
-  "أريج",
-  "بسمة",
-  "سديم",
-  "رغد",
-  "مها",
-  "لجين",
-  "آسية",
-  "تمارا",
-  "هيا",
-  "مشاعل",
-  "أثير",
-  "ديما",
-  "فرح",
-  "بنان",
-  "يارا",
-  "غلا",
-  "لانا",
-  "ميس",
-  "سدن",
-  "نجلاء",
-  "هاجر",
-  "نجود",
-  "مرام",
-  "أفنان",
-  "رزان",
-  "جنى",
-  "جوري",
-  "لين",
-  "سلسبيل",
-]
-
-const familyNames = [
-  "القحطاني",
-  "المطيري",
-  "العتيبي",
-  "الشمري",
-  "الزهراني",
-  "الجهني",
-  "الحربي",
-  "الغامدي",
-  "العنزي",
-  "الدوسري",
-  "السبيعي",
-  "الشهري",
-]
-
-const neighborhoods = [
-  "حي النزهة",
-  "حي الملقا",
-  "حي الياسمين",
-  "حي الورود",
-  "حي الربيع",
-  "حي العليا",
-  "حي الصحافة",
-  "حي النخيل",
-  "حي الملز",
-  "حي الروضة",
-  "حي العقيق",
-  "حي حطين",
-]
-
-const activitySets = [
-  ["النادي العلمي", "القراءة"],
-  ["الرسم", "المسرح"],
-  ["السباحة", "الشطرنج"],
-  ["البرمجة", "الروبوتات"],
-  ["الإذاعة المدرسية", "كرة السلة"],
-  ["الخط العربي", "المهارات الرقمية"],
-]
-
-export const defaultGrades = Array.from(new Set(classroomDefinitions.map((entry) => entry.grade)))
-export const defaultClassrooms = classroomDefinitions.map((entry) => entry.classroom)
 
 const normalizeName = (value: string) =>
   value
@@ -329,97 +56,39 @@ const normalizeName = (value: string) =>
 const inferGradeFromClassroom = (classroom: string) => {
   if (classroom.startsWith("١/")) return "أول متوسط"
   if (classroom.startsWith("٢/")) return "ثاني متوسط"
-  return "ثالث متوسط"
+  if (classroom.startsWith("٣/")) return "ثالث متوسط"
+  return ""
 }
 
-const usedNames = new Set(
-  classroomDefinitions.flatMap((entry) => (entry.seededStudents || []).map((student) => normalizeName(student.name))),
-)
-
-let generatedNameCursor = 0
-const generateStudentName = () => {
-  while (generatedNameCursor < firstNames.length * familyNames.length) {
-    const firstName = firstNames[generatedNameCursor % firstNames.length]
-    const familyName = familyNames[Math.floor(generatedNameCursor / firstNames.length) % familyNames.length]
-    generatedNameCursor += 1
-    const candidate = `${firstName} ${familyName}`
-    const normalizedCandidate = normalizeName(candidate)
-    if (!usedNames.has(normalizedCandidate)) {
-      usedNames.add(normalizedCandidate)
-      return candidate
-    }
-  }
-
-  const fallback = `طالبة ${generatedNameCursor}`
-  generatedNameCursor += 1
-  return fallback
-}
-
-const buildPhoneNumber = (seed: number, offset = 0) => `05${String(10000000 + seed * 137 + offset * 211).slice(-8)}`
-
-const buildGeneratedStudent = (
-  definition: ClassroomDefinition,
-  sequence: number,
-  classroomIndex: number,
-  seed: number,
-): ManagedStudent => {
-  const name = generateStudentName()
-  const joinYear = definition.grade === "أول متوسط" ? 2024 : definition.grade === "ثاني متوسط" ? 2023 : 2022
-
-  return {
-    id: String(seed),
-    name,
-    studentId: String(10000 + seed),
-    grade: definition.grade,
-    classroom: definition.classroom,
-    parentPhone: buildPhoneNumber(seed),
-    status: "نشط",
-    birthDate: `${definition.grade === "أول متوسط" ? 2013 : definition.grade === "ثاني متوسط" ? 2012 : 2011}-${String((sequence % 9) + 1).padStart(2, "0")}-${String((sequence % 27) + 1).padStart(2, "0")}`,
-    address: `الرياض، ${neighborhoods[(classroomIndex + sequence) % neighborhoods.length]}`,
-    attendance: 90 + ((classroomIndex + sequence) % 9),
-    academicPerformance: 82 + ((classroomIndex * 3 + sequence) % 15),
-    behaviorRating: 84 + ((classroomIndex * 5 + sequence) % 14),
-    lastLogin: `2026-03-${String(((seed + sequence) % 9) + 2).padStart(2, "0")}`,
-    parentEmail: `parent${10000 + seed}@example.com`,
-    emergencyContact: buildPhoneNumber(seed, 1),
-    joinDate: `${joinYear}-08-${String(((sequence + classroomIndex) % 7) + 18).padStart(2, "0")}`,
-    activities: activitySets[(classroomIndex + sequence) % activitySets.length],
-    medicalNotes: seed % 17 === 0 ? "تحتاج إلى متابعة بسيطة أثناء النشاط الرياضي" : undefined,
-  }
-}
-
-export const defaultStudentRoster: ManagedStudent[] = classroomDefinitions.flatMap((definition, classroomIndex) => {
-  const seededStudents = (definition.seededStudents || []).map((student) => ({
-    ...student,
-    grade: definition.grade,
-    classroom: definition.classroom,
-    status: student.status === "منقول" ? "نشط" : student.status,
-  }))
-
-  const generatedStudents = Array.from(
-    { length: Math.max(0, targetStudentsPerClassroom - seededStudents.length) },
-    (_, index) => buildGeneratedStudent(definition, index, classroomIndex, 100 + classroomIndex * targetStudentsPerClassroom + index + 1),
-  )
-
-  return [...seededStudents, ...generatedStudents]
-})
+export const defaultStudentRoster: ManagedStudent[] = []
 
 const sortStudents = (students: ManagedStudent[]) => {
   const classroomOrder = new Map(defaultClassrooms.map((classroom, index) => [classroom, index]))
 
   return [...students].sort((left, right) => {
-    const classroomDelta = (classroomOrder.get(left.classroom) || 0) - (classroomOrder.get(right.classroom) || 0)
+    const classroomDelta =
+      (classroomOrder.get(left.classroom) ?? Number.MAX_SAFE_INTEGER) -
+      (classroomOrder.get(right.classroom) ?? Number.MAX_SAFE_INTEGER)
     if (classroomDelta !== 0) return classroomDelta
-    return Number.parseInt(left.studentId, 10) - Number.parseInt(right.studentId, 10)
+
+    const leftStudentId = Number.parseInt(left.studentId, 10)
+    const rightStudentId = Number.parseInt(right.studentId, 10)
+    if (Number.isFinite(leftStudentId) && Number.isFinite(rightStudentId) && leftStudentId !== rightStudentId) {
+      return leftStudentId - rightStudentId
+    }
+
+    return left.name.localeCompare(right.name, "ar")
   })
 }
 
 const isSameStudent = (reference: ManagedStudent, candidate: Partial<ManagedStudent>) => {
   if (candidate.studentId && candidate.studentId.trim() === reference.studentId) return true
   if (candidate.id && candidate.id.trim() === reference.id) return true
+
   if (candidate.name && candidate.classroom) {
     return normalizeName(candidate.name) === normalizeName(reference.name) && candidate.classroom.trim() === reference.classroom
   }
+
   return false
 }
 
@@ -433,57 +102,60 @@ const hydrateStudent = (candidate: Partial<ManagedStudent>, fallback: ManagedStu
   classroom: (candidate.classroom || fallback.classroom).trim(),
   parentPhone: (candidate.parentPhone || fallback.parentPhone).trim(),
   status: candidate.status || fallback.status,
-  birthDate: candidate.birthDate || fallback.birthDate,
-  address: candidate.address || fallback.address,
-  notes: candidate.notes || fallback.notes,
+  birthDate: candidate.birthDate ?? fallback.birthDate,
+  address: candidate.address ?? fallback.address,
+  notes: candidate.notes ?? fallback.notes,
   attendance: candidate.attendance ?? fallback.attendance,
   academicPerformance: candidate.academicPerformance ?? fallback.academicPerformance,
   behaviorRating: candidate.behaviorRating ?? fallback.behaviorRating,
-  lastLogin: candidate.lastLogin || fallback.lastLogin,
-  profileImage: candidate.profileImage || fallback.profileImage,
-  parentEmail: candidate.parentEmail || fallback.parentEmail,
-  emergencyContact: candidate.emergencyContact || fallback.emergencyContact,
-  medicalNotes: candidate.medicalNotes || fallback.medicalNotes,
-  joinDate: candidate.joinDate || fallback.joinDate,
-  activities: candidate.activities && candidate.activities.length > 0 ? candidate.activities : fallback.activities,
+  lastLogin: candidate.lastLogin ?? fallback.lastLogin,
+  profileImage: candidate.profileImage ?? fallback.profileImage,
+  parentEmail: candidate.parentEmail ?? fallback.parentEmail,
+  emergencyContact: candidate.emergencyContact ?? fallback.emergencyContact,
+  medicalNotes: candidate.medicalNotes ?? fallback.medicalNotes,
+  joinDate: candidate.joinDate ?? fallback.joinDate,
+  activities: Array.isArray(candidate.activities) ? candidate.activities.filter(Boolean) : fallback.activities,
 })
 
 const buildExtraStudent = (candidate: Partial<ManagedStudent>, index: number): ManagedStudent | null => {
   if (!candidate.name || !candidate.classroom) return null
 
-  const inferredGrade = candidate.grade || inferGradeFromClassroom(candidate.classroom)
   const fallbackSeed = 500 + index
   const fallback: ManagedStudent = {
     id: candidate.id?.trim() || String(fallbackSeed),
     name: candidate.name.trim(),
     studentId: candidate.studentId?.trim() || String(20000 + fallbackSeed),
-    grade: inferredGrade,
+    grade: String(candidate.grade || inferGradeFromClassroom(candidate.classroom)).trim(),
     classroom: candidate.classroom.trim(),
-    parentPhone: candidate.parentPhone?.trim() || buildPhoneNumber(fallbackSeed),
+    parentPhone: candidate.parentPhone?.trim() || "",
     status: candidate.status || "نشط",
-    birthDate: candidate.birthDate || "2012-01-01",
-    address: candidate.address || `الرياض، ${neighborhoods[index % neighborhoods.length]}`,
-    attendance: candidate.attendance ?? 95,
-    academicPerformance: candidate.academicPerformance ?? 88,
-    behaviorRating: candidate.behaviorRating ?? 90,
-    lastLogin: candidate.lastLogin || "2026-03-10",
+    birthDate: candidate.birthDate || "",
+    address: candidate.address || "",
+    attendance: candidate.attendance,
+    academicPerformance: candidate.academicPerformance,
+    behaviorRating: candidate.behaviorRating,
+    lastLogin: candidate.lastLogin,
     profileImage: candidate.profileImage,
-    parentEmail: candidate.parentEmail || `parent${20000 + fallbackSeed}@example.com`,
-    emergencyContact: candidate.emergencyContact || buildPhoneNumber(fallbackSeed, 1),
+    parentEmail: candidate.parentEmail,
+    emergencyContact: candidate.emergencyContact,
     medicalNotes: candidate.medicalNotes,
-    joinDate: candidate.joinDate || "2024-08-18",
-    activities: candidate.activities && candidate.activities.length > 0 ? candidate.activities : activitySets[index % activitySets.length],
+    joinDate: candidate.joinDate || "",
+    activities: Array.isArray(candidate.activities) ? candidate.activities.filter(Boolean) : [],
     notes: candidate.notes,
   }
 
   return hydrateStudent(candidate, fallback, index)
 }
 
-export const mergeWithDefaultStudentRoster = (savedStudents: Partial<ManagedStudent>[] = []) => {
+export const normalizeStudentRoster = (
+  savedStudents: Partial<ManagedStudent>[] = [],
+  fallbackStudents: ManagedStudent[] = [],
+) => {
   const normalizedSavedStudents = Array.isArray(savedStudents) ? savedStudents : []
+  const normalizedFallbackStudents = Array.isArray(fallbackStudents) ? fallbackStudents : []
   const usedIndexes = new Set<number>()
 
-  const mergedDefaults = defaultStudentRoster.map((student, index) => {
+  const mergedFallbacks = normalizedFallbackStudents.map((student, index) => {
     const matchedIndex = normalizedSavedStudents.findIndex(
       (candidate, candidateIndex) => !usedIndexes.has(candidateIndex) && isSameStudent(student, candidate),
     )
@@ -500,5 +172,8 @@ export const mergeWithDefaultStudentRoster = (savedStudents: Partial<ManagedStud
     return builtStudent ? [builtStudent] : []
   })
 
-  return sortStudents([...mergedDefaults, ...extraStudents])
+  return sortStudents([...mergedFallbacks, ...extraStudents])
 }
+
+export const mergeWithDefaultStudentRoster = (savedStudents: Partial<ManagedStudent>[] = []) =>
+  normalizeStudentRoster(savedStudents, defaultStudentRoster)

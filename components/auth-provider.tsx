@@ -36,6 +36,7 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const SESSION_CACHE_KEY = "school-session-user"
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null)
@@ -45,9 +46,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const applySessionUser = (user: SessionUser | null) => {
     setSessionUser(user)
+
+    if (typeof window === "undefined") {
+      return
+    }
+
+    if (user) {
+      window.localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(user))
+      return
+    }
+
+    window.localStorage.removeItem(SESSION_CACHE_KEY)
   }
 
-  const refreshSession = async () => {
+  const requestSession = async () => {
     try {
       const response = await fetch("/api/auth/session", {
         method: "GET",
@@ -56,27 +68,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
 
       if (!response.ok) {
-        applySessionUser(null)
-        return null
+        if (response.status === 401) {
+          applySessionUser(null)
+          return { resolved: true, user: null }
+        }
+
+        return { resolved: false, user: sessionUser }
       }
 
       const data = (await response.json()) as { user: SessionUser | null }
       applySessionUser(data.user || null)
-      return data.user || null
+      return { resolved: true, user: data.user || null }
     } catch (error) {
       console.error("Failed to refresh session:", error)
-      applySessionUser(null)
-      return null
+      return { resolved: false, user: sessionUser }
     }
+  }
+
+  const refreshSession = async () => {
+    const result = await requestSession()
+    return result.user ?? null
   }
 
   useEffect(() => {
     let active = true
 
     void (async () => {
-      const user = await refreshSession()
+      if (typeof window !== "undefined") {
+        try {
+          const cachedSessionUser = window.localStorage.getItem(SESSION_CACHE_KEY)
+          if (cachedSessionUser) {
+            setSessionUser(JSON.parse(cachedSessionUser) as SessionUser)
+          }
+        } catch (error) {
+          console.error("Failed to read cached session:", error)
+        }
+      }
+
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const result = await requestSession()
+        if (result.resolved) {
+          if (active) {
+            setIsReady(true)
+          }
+          return
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)))
+      }
+
       if (active) {
-        applySessionUser(user)
         setIsReady(true)
       }
     })()

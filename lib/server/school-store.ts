@@ -6,6 +6,7 @@ import type { DashboardContent, DashboardPrincipalMessage } from "@/lib/dashboar
 import { defaultDashboardContent, normalizeDashboardContent } from "@/lib/dashboard-data"
 import type { ManagedStudent } from "@/lib/student-roster"
 import {
+  type ClassScheduleMap,
   createDefaultGradeStudents,
   createDefaultStudentProfiles,
   defaultAttendanceRecords,
@@ -16,9 +17,12 @@ import {
   mergeGradeStudentsWithRoster,
   mergeStudentProfilesWithStudents,
   mergeTeacherDirectory,
+  getScheduleClassNames,
+  normalizeText,
+  normalizeTeacherDirectoryEntries,
   normalizeSchoolClasses,
+  normalizeClassSchedulesPayload,
   normalizeSchoolNotes,
-  normalizeSchedulePayload,
   syncAttendanceRecordsWithStudents,
   type AttendanceRecord,
   type DaySchedule,
@@ -28,8 +32,13 @@ import {
   type SchoolNote,
   type StudentProfileRecord,
 } from "@/lib/school-data"
+import {
+  deleteManagedStudentAccountsByDirectoryEntries,
+  deleteManagedTeacherAccountsByDirectoryEntries,
+} from "@/lib/server/auth-store"
 import { getServerDataDirectory } from "@/lib/server/data-directory"
-import { mergeWithDefaultStudentRoster } from "@/lib/student-roster"
+import { mergeWithDefaultStudentRoster, normalizeStudentRoster } from "@/lib/student-roster"
+import type { RegistrationRequest } from "@/lib/auth-types"
 import type { TeacherDirectoryEntry } from "@/lib/teachers-directory"
 
 interface SchoolDatabase {
@@ -37,6 +46,7 @@ interface SchoolDatabase {
   attendanceRecords: AttendanceRecord[]
   gradeStudents: GradeStudent[]
   scheduleData: DaySchedule[]
+  classSchedules: ClassScheduleMap
   periodSlots: PeriodSlot[]
   classes: SchoolClass[]
   teachers: TeacherDirectoryEntry[]
@@ -50,13 +60,136 @@ const SCHOOL_DATA_FILE = path.join(DATA_DIRECTORY, "school.json")
 
 let mutationQueue = Promise.resolve()
 
+const UNASSIGNED_TEACHER_LABEL = "غير مسند"
+
+function normalizeTeacherReference(value: string | null | undefined) {
+  return normalizeText(String(value || "").replace(/^أ\.\s*/u, ""))
+}
+
+function normalizeEmailValue(value: string | undefined) {
+  return String(value || "").trim().toLowerCase()
+}
+
+function normalizePhoneValue(value: string | undefined) {
+  return String(value || "").replace(/\D/g, "")
+}
+
+function normalizeStudentReference(value: string | null | undefined) {
+  return normalizeText(String(value || ""))
+}
+
+function buildTeacherReferenceSet(teachers: TeacherDirectoryEntry[]) {
+  return new Set(teachers.map((teacher) => normalizeTeacherReference(teacher.name)).filter(Boolean))
+}
+
+function isKnownTeacherReference(reference: string, teacherReferences: Set<string>) {
+  const normalizedReference = normalizeTeacherReference(reference)
+  return !normalizedReference || teacherReferences.has(normalizedReference)
+}
+
+function sanitizeClassesByTeachers(classes: SchoolClass[], teachers: TeacherDirectoryEntry[]) {
+  const teacherReferences = buildTeacherReferenceSet(teachers)
+
+  return classes.map((schoolClass) => ({
+    ...schoolClass,
+    teacher: isKnownTeacherReference(schoolClass.teacher, teacherReferences)
+      ? schoolClass.teacher
+      : UNASSIGNED_TEACHER_LABEL,
+  }))
+}
+
+function sanitizeScheduleDaysByTeachers(scheduleData: DaySchedule[], teachers: TeacherDirectoryEntry[]) {
+  const teacherReferences = buildTeacherReferenceSet(teachers)
+
+  return scheduleData.map((day) => ({
+    ...day,
+    periods: day.periods.map((period) => {
+      if (period.subject === "استراحة") {
+        return { ...period, teacher: "" }
+      }
+
+      return {
+        ...period,
+        teacher: isKnownTeacherReference(period.teacher, teacherReferences) ? period.teacher : "",
+      }
+    }),
+  }))
+}
+
+function sanitizeSchedulePayloadByTeachers(
+  scheduleData: DaySchedule[],
+  classSchedules: ClassScheduleMap,
+  teachers: TeacherDirectoryEntry[],
+) {
+  return {
+    scheduleData: sanitizeScheduleDaysByTeachers(scheduleData, teachers),
+    classSchedules: Object.fromEntries(
+      Object.entries(classSchedules).map(([className, schedule]) => [className, sanitizeScheduleDaysByTeachers(schedule, teachers)]),
+    ) as ClassScheduleMap,
+  }
+}
+
+function isSameTeacherDirectoryEntry(left: TeacherDirectoryEntry, right: TeacherDirectoryEntry) {
+  const leftEmail = normalizeEmailValue(left.email)
+  const rightEmail = normalizeEmailValue(right.email)
+  if (leftEmail && rightEmail && leftEmail === rightEmail) {
+    return true
+  }
+
+  const leftTeacherId = normalizeText(String(left.teacherId || ""))
+  const rightTeacherId = normalizeText(String(right.teacherId || ""))
+  if (leftTeacherId && rightTeacherId && leftTeacherId === rightTeacherId) {
+    return true
+  }
+
+  const leftPhone = normalizePhoneValue(left.phone)
+  const rightPhone = normalizePhoneValue(right.phone)
+  if (leftPhone && rightPhone && leftPhone === rightPhone) {
+    return true
+  }
+
+  return normalizeTeacherReference(left.name) === normalizeTeacherReference(right.name)
+}
+
+function isSameStudentDirectoryEntry(left: ManagedStudent, right: ManagedStudent) {
+  const leftStudentId = normalizeStudentReference(left.studentId)
+  const rightStudentId = normalizeStudentReference(right.studentId)
+  if (leftStudentId && rightStudentId && leftStudentId === rightStudentId) {
+    return true
+  }
+
+  const leftId = normalizeStudentReference(left.id)
+  const rightId = normalizeStudentReference(right.id)
+  if (leftId && rightId && leftId === rightId) {
+    return true
+  }
+
+  const leftPhone = normalizePhoneValue(left.parentPhone)
+  const rightPhone = normalizePhoneValue(right.parentPhone)
+  if (leftPhone && rightPhone && leftPhone === rightPhone) {
+    return true
+  }
+
+  const leftClassroom = normalizeStudentReference(left.classroom)
+  const rightClassroom = normalizeStudentReference(right.classroom)
+  if (leftClassroom && rightClassroom && leftClassroom !== rightClassroom) {
+    return false
+  }
+
+  return normalizeStudentReference(left.name) === normalizeStudentReference(right.name)
+}
+
 function createSeedSchoolDatabase(): SchoolDatabase {
   const students = mergeWithDefaultStudentRoster()
+  const schedule = normalizeClassSchedulesPayload({}, defaultPeriodSlots, getScheduleClassNames(defaultSchoolClasses, students), defaultScheduleData)
+
   return {
     students,
     attendanceRecords: syncAttendanceRecordsWithStudents(defaultAttendanceRecords, students),
     gradeStudents: createDefaultGradeStudents(students),
-    ...normalizeSchedulePayload(defaultScheduleData, defaultPeriodSlots),
+    scheduleData: schedule.scheduleData,
+    classSchedules: schedule.classSchedules,
+    periodSlots: schedule.periodSlots,
     classes: normalizeSchoolClasses(defaultSchoolClasses),
     teachers: mergeTeacherDirectory(),
     notes: normalizeSchoolNotes(defaultSchoolNotes),
@@ -75,19 +208,23 @@ async function ensureDatabaseFile() {
 }
 
 function normalizeSchoolDatabase(data: Partial<SchoolDatabase>): SchoolDatabase {
-  const students = mergeWithDefaultStudentRoster(Array.isArray(data.students) ? data.students : [])
+  const students = Array.isArray(data.students) ? normalizeStudentRoster(data.students, []) : mergeWithDefaultStudentRoster()
   const gradeStudents = mergeGradeStudentsWithRoster(Array.isArray(data.gradeStudents) ? data.gradeStudents : [], students)
   const attendanceRecords = syncAttendanceRecordsWithStudents(
     Array.isArray(data.attendanceRecords) ? data.attendanceRecords : defaultAttendanceRecords,
     students,
   )
   const classes = normalizeSchoolClasses(Array.isArray(data.classes) ? data.classes : defaultSchoolClasses)
-  const teachers = mergeTeacherDirectory(Array.isArray(data.teachers) ? data.teachers : [])
+  const teachers = Array.isArray(data.teachers) ? normalizeTeacherDirectoryEntries(data.teachers, []) : mergeTeacherDirectory()
   const notes = normalizeSchoolNotes(Array.isArray(data.notes) ? data.notes : defaultSchoolNotes)
-  const schedule = normalizeSchedulePayload(
-    Array.isArray(data.scheduleData) ? data.scheduleData : defaultScheduleData,
+  const schedule = normalizeClassSchedulesPayload(
+    data.classSchedules && typeof data.classSchedules === "object" ? (data.classSchedules as ClassScheduleMap) : {},
     Array.isArray(data.periodSlots) ? data.periodSlots : defaultPeriodSlots,
+    getScheduleClassNames(classes, students),
+    Array.isArray(data.scheduleData) ? data.scheduleData : defaultScheduleData,
   )
+  const sanitizedClasses = sanitizeClassesByTeachers(classes, teachers)
+  const sanitizedSchedule = sanitizeSchedulePayloadByTeachers(schedule.scheduleData, schedule.classSchedules, teachers)
   const studentProfiles = mergeStudentProfilesWithStudents(
     Array.isArray(data.studentProfiles) ? data.studentProfiles : [],
     students,
@@ -100,9 +237,10 @@ function normalizeSchoolDatabase(data: Partial<SchoolDatabase>): SchoolDatabase 
     students,
     attendanceRecords,
     gradeStudents,
-    scheduleData: schedule.scheduleData,
+    scheduleData: sanitizedSchedule.scheduleData,
+    classSchedules: sanitizedSchedule.classSchedules,
     periodSlots: schedule.periodSlots,
-    classes,
+    classes: sanitizedClasses,
     teachers,
     notes,
     studentProfiles,
@@ -146,8 +284,14 @@ export async function getSchoolSnapshot() {
 }
 
 export async function saveStudents(students: ManagedStudent[]) {
-  return mutateDatabase((data) => {
-    data.students = mergeWithDefaultStudentRoster(students)
+  const result = await mutateDatabase((data) => {
+    const previousStudents = Array.isArray(data.students) ? normalizeStudentRoster(data.students, []) : []
+    const nextStudents = normalizeStudentRoster(students, [])
+    const removedStudents = previousStudents.filter(
+      (student) => !nextStudents.some((candidate) => isSameStudentDirectoryEntry(student, candidate)),
+    )
+
+    data.students = nextStudents
     data.gradeStudents = mergeGradeStudentsWithRoster(data.gradeStudents, data.students)
     data.attendanceRecords = syncAttendanceRecordsWithStudents(data.attendanceRecords, data.students)
     data.studentProfiles = mergeStudentProfilesWithStudents(
@@ -156,8 +300,17 @@ export async function saveStudents(students: ManagedStudent[]) {
       data.gradeStudents,
       data.attendanceRecords,
     )
-    return data.students
+    return {
+      students: data.students,
+      removedStudents,
+    }
   })
+
+  if (result.removedStudents.length > 0) {
+    await deleteManagedStudentAccountsByDirectoryEntries(result.removedStudents)
+  }
+
+  return result.students
 }
 
 export async function saveAttendanceRecords(records: AttendanceRecord[]) {
@@ -186,26 +339,195 @@ export async function saveGrades(gradeStudents: GradeStudent[]) {
   })
 }
 
-export async function saveSchedule(input: { scheduleData: DaySchedule[]; periodSlots: PeriodSlot[] }) {
+export async function saveSchedule(input: { classSchedules?: ClassScheduleMap; scheduleData?: DaySchedule[]; periodSlots?: PeriodSlot[] }) {
   return mutateDatabase((data) => {
-    const normalized = normalizeSchedulePayload(input.scheduleData, input.periodSlots)
-    data.scheduleData = normalized.scheduleData
+    const classNames = getScheduleClassNames(data.classes, data.students)
+    const nextClassSchedules =
+      input.classSchedules && Object.keys(input.classSchedules).length > 0
+        ? input.classSchedules
+        : Array.isArray(input.scheduleData)
+          ? (Object.fromEntries(classNames.map((className) => [className, input.scheduleData || defaultScheduleData])) as ClassScheduleMap)
+          : data.classSchedules
+
+    const normalized = normalizeClassSchedulesPayload(
+      nextClassSchedules,
+      Array.isArray(input.periodSlots) && input.periodSlots.length > 0 ? input.periodSlots : data.periodSlots,
+      classNames,
+      data.scheduleData,
+    )
+    const sanitized = sanitizeSchedulePayloadByTeachers(normalized.scheduleData, normalized.classSchedules, data.teachers)
+
+    data.scheduleData = sanitized.scheduleData
+    data.classSchedules = sanitized.classSchedules
     data.periodSlots = normalized.periodSlots
-    return normalized
+    return {
+      scheduleData: sanitized.scheduleData,
+      classSchedules: sanitized.classSchedules,
+      periodSlots: normalized.periodSlots,
+    }
   })
 }
 
 export async function saveClasses(classes: SchoolClass[]) {
   return mutateDatabase((data) => {
-    data.classes = normalizeSchoolClasses(classes)
+    data.classes = sanitizeClassesByTeachers(normalizeSchoolClasses(classes), data.teachers)
     return data.classes
   })
 }
 
 export async function saveTeachers(teachers: TeacherDirectoryEntry[]) {
+  const result = await mutateDatabase((data) => {
+    const previousTeachers = Array.isArray(data.teachers) ? normalizeTeacherDirectoryEntries(data.teachers, []) : []
+    const nextTeachers = normalizeTeacherDirectoryEntries(teachers, [])
+    const removedTeachers = previousTeachers.filter(
+      (teacher) => !nextTeachers.some((candidate) => isSameTeacherDirectoryEntry(teacher, candidate)),
+    )
+    const sanitizedSchedule = sanitizeSchedulePayloadByTeachers(data.scheduleData, data.classSchedules, nextTeachers)
+
+    data.teachers = nextTeachers
+    data.classes = sanitizeClassesByTeachers(data.classes, nextTeachers)
+    data.scheduleData = sanitizedSchedule.scheduleData
+    data.classSchedules = sanitizedSchedule.classSchedules
+
+    return {
+      teachers: data.teachers,
+      removedTeachers,
+    }
+  })
+
+  if (result.removedTeachers.length > 0) {
+    await deleteManagedTeacherAccountsByDirectoryEntries(result.removedTeachers)
+  }
+
+  return result.teachers
+}
+
+export async function syncApprovedRegistrationRequestToSchoolData(request: RegistrationRequest) {
+  if (request.userType !== "teacher" && request.userType !== "student") {
+    return
+  }
+
   return mutateDatabase((data) => {
-    data.teachers = mergeTeacherDirectory(teachers)
-    return data.teachers
+    const normalizedName = request.name.trim()
+    const normalizedEmail = request.email.trim().toLowerCase()
+    const normalizedPhone = String(request.phoneNumber || "").replace(/\D/g, "")
+    const today = new Date().toISOString().split("T")[0]
+
+    if (request.userType === "teacher") {
+      const alreadyExists = data.teachers.some((teacher) => {
+        const teacherEmail = String(teacher.email || "").trim().toLowerCase()
+        const teacherPhone = String(teacher.phone || "").replace(/\D/g, "")
+        return (
+          normalizeText(teacher.name) === normalizeText(normalizedName) ||
+          teacherEmail === normalizedEmail ||
+          (normalizedPhone.length > 0 && teacherPhone === normalizedPhone)
+        )
+      })
+
+      if (!alreadyExists) {
+        const nextId =
+          Math.max(
+            0,
+            ...data.teachers
+              .map((teacher) => Number.parseInt(String(teacher.id || "0"), 10))
+              .filter((value) => Number.isFinite(value)),
+          ) + 1
+
+        const nextTeacherNumber =
+          Math.max(
+            10000,
+            ...data.teachers
+              .map((teacher) => Number.parseInt(String(teacher.teacherId || "").replace(/\D/g, ""), 10))
+              .filter((value) => Number.isFinite(value)),
+          ) + 1
+
+        data.teachers = normalizeTeacherDirectoryEntries(
+          [
+            ...data.teachers,
+            {
+              id: String(nextId),
+              name: normalizedName,
+              teacherId: `T${nextTeacherNumber}`,
+              specialization: "",
+              department: "",
+              phone: request.phoneNumber || "",
+              status: "نشط",
+              birthDate: "",
+              address: "",
+              attendance: undefined,
+              performance: undefined,
+              email: normalizedEmail,
+              joinDate: today,
+              lastLogin: "",
+              classes: [],
+              subjects: [],
+              notes: "تمت إضافتها تلقائيًا بعد الموافقة على التسجيل",
+            },
+          ],
+          [],
+        )
+      }
+
+      return
+    }
+
+    const alreadyExists = data.students.some((student) => {
+      const parentPhone = String(student.parentPhone || "").replace(/\D/g, "")
+      return normalizeText(student.name) === normalizeText(normalizedName) || (normalizedPhone.length > 0 && parentPhone === normalizedPhone)
+    })
+
+    if (alreadyExists) {
+      return
+    }
+
+    const nextId =
+      Math.max(
+        0,
+        ...data.students
+          .map((student) => Number.parseInt(String(student.id || "0"), 10))
+          .filter((value) => Number.isFinite(value)),
+      ) + 1
+
+    const nextStudentId =
+      Math.max(
+        10000,
+        ...data.students
+          .map((student) => Number.parseInt(String(student.studentId || "0"), 10))
+          .filter((value) => Number.isFinite(value)),
+      ) + 1
+
+    data.students = normalizeStudentRoster(
+      [
+        ...data.students,
+        {
+          id: String(nextId),
+          name: normalizedName,
+          studentId: String(nextStudentId),
+          grade: "",
+          classroom: "",
+          parentPhone: request.phoneNumber || "",
+          status: "نشط",
+          birthDate: "",
+          address: "",
+          attendance: undefined,
+          academicPerformance: undefined,
+          behaviorRating: undefined,
+          joinDate: today,
+          lastLogin: "",
+          activities: [],
+          notes: "تمت إضافتها تلقائيًا بعد الموافقة على التسجيل",
+        },
+      ],
+      [],
+    )
+    data.gradeStudents = mergeGradeStudentsWithRoster(data.gradeStudents, data.students)
+    data.attendanceRecords = syncAttendanceRecordsWithStudents(data.attendanceRecords, data.students)
+    data.studentProfiles = mergeStudentProfilesWithStudents(
+      data.studentProfiles,
+      data.students,
+      data.gradeStudents,
+      data.attendanceRecords,
+    )
   })
 }
 

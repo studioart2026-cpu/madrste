@@ -11,13 +11,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "يجب تسجيل الدخول أولًا" }, { status: 401 })
     }
 
+    if (user.userType !== "admin") {
+      return NextResponse.json({ error: "تغيير كلمات المرور من مهام مدير النظام فقط" }, { status: 403 })
+    }
+
     const body = (await request.json()) as {
-      currentPassword?: string
       newPassword?: string
       targetEmail?: string
     }
 
     const newPassword = body.newPassword || ""
+    const targetEmail = body.targetEmail?.trim().toLowerCase() || ""
+
+    if (!targetEmail) {
+      return NextResponse.json({ error: "البريد الإلكتروني للحساب المطلوب مطلوب" }, { status: 400 })
+    }
+
     if (newPassword.length < 8) {
       return NextResponse.json({ error: "يجب أن تكون كلمة المرور 8 أحرف على الأقل" }, { status: 400 })
     }
@@ -25,8 +34,7 @@ export async function POST(request: Request) {
     await changePassword({
       requesterEmail: user.email,
       requesterRole: user.userType,
-      targetEmail: body.targetEmail,
-      currentPassword: body.currentPassword,
+      targetEmail,
       newPassword,
     })
 
@@ -34,9 +42,11 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "تعذر تغيير كلمة المرور حاليًا"
     const status =
-      message.includes("مطلوبة") || message.includes("غير صحيحة") || message.includes("صلاحية") || message.includes("العثور")
-        ? 400
-        : 500
+      message.includes("مدير النظام")
+        ? 403
+        : message.includes("مطلوب") || message.includes("العثور")
+          ? 400
+          : 500
     return NextResponse.json({ error: message }, { status })
   }
 }

@@ -38,7 +38,7 @@ const normalizeText = (value: string) => value.replace(/\s+/g, " ").trim()
 
 export default function GradesPage() {
   const { toast } = useToast()
-  const { userType, email, userName } = useAuth()
+  const { userType } = useAuth()
   const isStudent = userType === "student"
   const [students, setStudents] = useState<Student[]>(createDefaultGradeStudents())
   const [isSaving, setIsSaving] = useState(false)
@@ -54,11 +54,6 @@ export default function GradesPage() {
     grade: "",
     examType: "فصلي أول", // القيمة الافتراضية لنوع الاختبار
   })
-
-  const studentEmailToName: Record<string, string> = {
-    "student@example.com": "سارة أحمد",
-    "student2@example.com": "نورة محمد",
-  }
 
   useEffect(() => {
     let isActive = true
@@ -105,12 +100,15 @@ export default function GradesPage() {
     }
   }
 
-  const matchedStudentName = (email && studentEmailToName[email]) || userName || ""
-  const studentScoped = students.filter((student) => student.name === matchedStudentName)
-  const scopedStudents = isStudent ? (studentScoped.length > 0 ? studentScoped : students.slice(0, 1)) : students
+  const scopedStudents = students
 
   const filteredStudents = scopedStudents.filter((student) => {
-    const matchesSearch = student.name.includes(searchQuery) || student.class.includes(searchQuery)
+    const matchesSearch = isStudent
+      ? student.grades.some(
+          (grade) =>
+            grade.subject.includes(searchQuery) || grade.examType.includes(searchQuery) || grade.date.includes(searchQuery),
+        )
+      : student.name.includes(searchQuery) || student.class.includes(searchQuery)
 
     const matchesClass = selectedClass === "all" || student.class === selectedClass
     const matchesSection = selectedSection === "all" || student.section === selectedSection
@@ -258,13 +256,13 @@ export default function GradesPage() {
   return (
     <div className="container mx-auto py-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">سجل الدرجات</h1>
+        <h1 className="text-3xl font-bold">{isStudent ? "درجاتي" : "سجل الدرجات"}</h1>
         <div className="flex items-center gap-4">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="بحث..."
+              placeholder={isStudent ? "ابحثي عن مادة أو اختبار..." : "بحث..."}
               className="w-64 pl-8 rtl:pr-8 rtl:pl-4"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -412,7 +410,7 @@ export default function GradesPage() {
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 mb-6">
-        <div className="w-full md:w-1/3">
+        {!isStudent && <div className="w-full md:w-1/3">
           <Label htmlFor="class-filter">تصفية حسب الصف</Label>
           <Select value={selectedClass} onValueChange={setSelectedClass}>
             <SelectTrigger id="class-filter">
@@ -427,8 +425,8 @@ export default function GradesPage() {
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div className="w-full md:w-1/3">
+        </div>}
+        <div className={`w-full ${isStudent ? "md:w-1/2" : "md:w-1/3"}`}>
           <Label htmlFor="subject-filter">تصفية حسب المادة</Label>
           <Select value={selectedSubject} onValueChange={setSelectedSubject}>
             <SelectTrigger id="subject-filter">
@@ -444,7 +442,7 @@ export default function GradesPage() {
             </SelectContent>
           </Select>
         </div>
-        <div className="w-full md:w-1/3">
+        {!isStudent && <div className="w-full md:w-1/3">
           <Label htmlFor="section-filter">قائمة الشعبة</Label>
           <Select value={selectedSection} onValueChange={setSelectedSection}>
             <SelectTrigger id="section-filter">
@@ -459,22 +457,22 @@ export default function GradesPage() {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </div>}
       </div>
 
       <Tabs defaultValue="table" className="w-full">
         <TabsList className="mb-4">
           <TabsTrigger value="table">جدول الدرجات</TabsTrigger>
-          <TabsTrigger value="students">الطالبات</TabsTrigger>
+          {!isStudent && <TabsTrigger value="students">الطالبات</TabsTrigger>}
         </TabsList>
         <TabsContent value="table" className="space-y-4">
           <div className="bg-white rounded-md shadow overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>الطالبة</TableHead>
-                  <TableHead>الصف</TableHead>
-                  <TableHead>الشعبة</TableHead>
+                  {!isStudent && <TableHead>الطالبة</TableHead>}
+                  {!isStudent && <TableHead>الصف</TableHead>}
+                  {!isStudent && <TableHead>الشعبة</TableHead>}
                   <TableHead>المادة</TableHead>
                   <TableHead>نوع الاختبار</TableHead>
                   <TableHead>الدرجة</TableHead>
@@ -487,9 +485,9 @@ export default function GradesPage() {
                     .filter((grade) => selectedSubject === "all" || grade.subject === selectedSubject)
                     .map((grade, index) => (
                       <TableRow key={`${student.id}-${index}`}>
-                        <TableCell className="font-medium">{student.name}</TableCell>
-                        <TableCell>{student.class}</TableCell>
-                        <TableCell>{student.section}</TableCell>
+                        {!isStudent && <TableCell className="font-medium">{student.name}</TableCell>}
+                        {!isStudent && <TableCell>{student.class}</TableCell>}
+                        {!isStudent && <TableCell>{student.section}</TableCell>}
                         <TableCell>{grade.subject}</TableCell>
                         <TableCell>{grade.examType}</TableCell>
                         <TableCell className={getGradeColor(grade.grade)}>{grade.grade}%</TableCell>
@@ -500,8 +498,13 @@ export default function GradesPage() {
               </TableBody>
             </Table>
           </div>
+          {filteredStudents.length === 0 && (
+            <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-600">
+              {isStudent ? "لا توجد درجات مرتبطة بحسابك حاليًا." : "لا توجد درجات مطابقة للفلاتر الحالية."}
+            </div>
+          )}
         </TabsContent>
-        <TabsContent value="students" className="space-y-4">
+        {!isStudent && <TabsContent value="students" className="space-y-4">
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filteredStudents.map((student) => (
               <Card key={student.id}>
@@ -525,9 +528,9 @@ export default function GradesPage() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+              ))}
           </div>
-        </TabsContent>
+        </TabsContent>}
       </Tabs>
     </div>
   )

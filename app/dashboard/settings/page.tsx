@@ -14,9 +14,7 @@ import { BellRing, Lock, Save, User, UserCheck, UserX, Shield, Users } from "luc
 import { useTheme } from "@/components/theme-provider"
 import { useToast } from "@/hooks/use-toast"
 import { NOTIFICATION_SOUND_ENABLED_KEY } from "@/lib/notification-sound"
-import { fetchStudents, saveStudents } from "@/lib/school-api"
 import type { RegistrationRequest } from "@/lib/auth-types"
-import type { ManagedStudent } from "@/lib/student-roster"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -29,63 +27,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-
-const addApprovedStudentToDirectory = async (request: RegistrationRequest) => {
-  if (request.userType !== "student") return
-
-  try {
-    const response = await fetchStudents()
-    const students = Array.isArray(response.students) ? response.students : []
-
-    const normalizedName = request.name.trim()
-    const normalizedPhone = (request.phoneNumber || "").replace(/\D/g, "")
-    const alreadyExists = students.some((student) => {
-      const name = typeof student.name === "string" ? student.name.trim() : ""
-      const parentPhone = typeof student.parentPhone === "string" ? student.parentPhone.replace(/\D/g, "") : ""
-      return name === normalizedName || (normalizedPhone.length > 0 && parentPhone === normalizedPhone)
-    })
-    if (alreadyExists) return
-
-    const nextId =
-      Math.max(
-        0,
-        ...students
-          .map((student) => Number.parseInt(String(student.id ?? "0"), 10))
-          .filter((value) => Number.isFinite(value)),
-      ) + 1
-
-    const nextStudentId =
-      Math.max(
-        10000,
-        ...students
-          .map((student) => Number.parseInt(String(student.studentId ?? "0"), 10))
-          .filter((value) => Number.isFinite(value)),
-      ) + 1
-
-    students.push({
-      id: nextId.toString(),
-      name: normalizedName,
-      studentId: nextStudentId.toString(),
-      grade: "أول متوسط",
-      classroom: "١/١",
-      parentPhone: request.phoneNumber || "",
-      status: "نشط",
-      birthDate: "",
-      address: "",
-      attendance: 100,
-      academicPerformance: 85,
-      behaviorRating: 90,
-      joinDate: new Date().toISOString().split("T")[0],
-      lastLogin: new Date().toISOString().split("T")[0],
-      activities: [],
-      notes: "تمت إضافتها تلقائيًا بعد الموافقة على التسجيل",
-    } satisfies ManagedStudent)
-
-    await saveStudents(students)
-  } catch {
-    // ignore sync failures here and allow approval flow to continue
-  }
-}
 
 export default function SettingsPage() {
   const { userName, userType, email, refreshSession, approveUser, rejectUser, isReady } = useAuth()
@@ -113,11 +54,9 @@ export default function SettingsPage() {
   const [maxLoginAttempts, setMaxLoginAttempts] = useState("5")
   const [passwordExpiration, setPasswordExpiration] = useState("90")
   const [minPasswordLength, setMinPasswordLength] = useState("8")
-  const [currentPassword, setCurrentPassword] = useState("")
-  const [newPassword, setNewPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [principalPassword, setPrincipalPassword] = useState("")
-  const [confirmPrincipalPassword, setConfirmPrincipalPassword] = useState("")
+  const [managedPasswordEmail, setManagedPasswordEmail] = useState("")
+  const [managedPassword, setManagedPassword] = useState("")
+  const [confirmManagedPassword, setConfirmManagedPassword] = useState("")
 
   useEffect(() => {
     setName(userName || "")
@@ -281,7 +220,25 @@ export default function SettingsPage() {
 
   // تغيير كلمة المرور
   const changePassword = async () => {
-    if (!newPassword || newPassword.length < 8) {
+    if (userType !== "admin") {
+      toast({
+        title: "غير متاح",
+        description: "تغيير كلمات المرور من مهام مدير النظام فقط",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!managedPasswordEmail.trim()) {
+      toast({
+        title: "خطأ",
+        description: "أدخل البريد الإلكتروني للحساب المطلوب",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!managedPassword || managedPassword.length < 8) {
       toast({
         title: "خطأ",
         description: "كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل",
@@ -290,7 +247,7 @@ export default function SettingsPage() {
       return
     }
 
-    if (newPassword !== confirmPassword) {
+    if (managedPassword !== confirmManagedPassword) {
       toast({
         title: "خطأ",
         description: "تأكيد كلمة المرور غير مطابق",
@@ -307,8 +264,8 @@ export default function SettingsPage() {
         },
         credentials: "same-origin",
         body: JSON.stringify({
-          currentPassword,
-          newPassword,
+          targetEmail: managedPasswordEmail,
+          newPassword: managedPassword,
         }),
       })
 
@@ -325,68 +282,13 @@ export default function SettingsPage() {
       return
     }
 
-    setCurrentPassword("")
-    setNewPassword("")
-    setConfirmPassword("")
+    setManagedPasswordEmail("")
+    setManagedPassword("")
+    setConfirmManagedPassword("")
     toast({
-      title: "تم تغيير كلمة المرور",
-      description: "تم تغيير كلمة المرور بنجاح",
+      title: "تم تحديث كلمة المرور",
+      description: "تم تحديث كلمة مرور الحساب بنجاح",
       variant: "default",
-    })
-  }
-
-  const changePrincipalPassword = async () => {
-    if (userType !== "admin") return
-
-    if (!principalPassword || principalPassword.length < 8) {
-      toast({
-        title: "خطأ",
-        description: "كلمة مرور المديرة يجب أن تكون 8 أحرف على الأقل",
-        variant: "destructive",
-      })
-      return
-    }
-
-    if (principalPassword !== confirmPrincipalPassword) {
-      toast({
-        title: "خطأ",
-        description: "تأكيد كلمة مرور المديرة غير مطابق",
-        variant: "destructive",
-      })
-      return
-    }
-
-    try {
-      const response = await fetch("/api/auth/password", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "same-origin",
-        body: JSON.stringify({
-          targetEmail: "principal@school.edu.sa",
-          newPassword: principalPassword,
-        }),
-      })
-
-      const data = (await response.json()) as { error?: string }
-      if (!response.ok) {
-        throw new Error(data.error || "تعذر تغيير كلمة مرور المديرة")
-      }
-    } catch (error) {
-      toast({
-        title: "خطأ",
-        description: error instanceof Error ? error.message : "تعذر تغيير كلمة مرور المديرة",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setPrincipalPassword("")
-    setConfirmPrincipalPassword("")
-    toast({
-      title: "تم التحديث",
-      description: "تم تغيير كلمة مرور المديرة بنجاح",
     })
   }
 
@@ -405,7 +307,6 @@ export default function SettingsPage() {
 
     try {
       await approveUser(currentRequest.id)
-      await addApprovedStudentToDirectory(currentRequest)
       setApproveDialogOpen(false)
       toast({
         title: "تمت الموافقة بنجاح",
@@ -533,54 +434,58 @@ export default function SettingsPage() {
             <CardHeader>
               <div className="flex items-center gap-2">
                 <Lock className="h-5 w-5 text-primary" />
-                <CardTitle>الأمان</CardTitle>
+                <CardTitle>{userType === "admin" ? "إدارة كلمات المرور" : "الأمان"}</CardTitle>
               </div>
-              <CardDescription>إدارة كلمة المرور وإعدادات الأمان</CardDescription>
+              <CardDescription>
+                {userType === "admin"
+                  ? "تحديث كلمات مرور الحسابات من خلال مدير النظام"
+                  : "تعديل كلمات المرور يتم من خلال مدير النظام فقط"}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="currentPassword">كلمة المرور الحالية</Label>
-                <Input id="currentPassword" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="newPassword">كلمة المرور الجديدة</Label>
-                <Input id="newPassword" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">تأكيد كلمة المرور</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                />
-              </div>
-              {userType === "admin" && (
-                <div className="space-y-2 border-t pt-4">
-                  <Label htmlFor="principalPassword">كلمة مرور المديرة الجديدة</Label>
-                  <Input
-                    id="principalPassword"
-                    type="password"
-                    value={principalPassword}
-                    onChange={(e) => setPrincipalPassword(e.target.value)}
-                    placeholder="تحديث كلمة مرور حساب المديرة"
-                  />
-                  <Label htmlFor="confirmPrincipalPassword">تأكيد كلمة مرور المديرة</Label>
-                  <Input
-                    id="confirmPrincipalPassword"
-                    type="password"
-                    value={confirmPrincipalPassword}
-                    onChange={(e) => setConfirmPrincipalPassword(e.target.value)}
-                    placeholder="أعيدي كتابة كلمة مرور المديرة"
-                  />
-                  <Button type="button" variant="outline" onClick={changePrincipalPassword}>
-                    تحديث كلمة مرور المديرة
-                  </Button>
+              {userType === "admin" ? (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="managedPasswordEmail">البريد الإلكتروني للحساب</Label>
+                    <Input
+                      id="managedPasswordEmail"
+                      type="email"
+                      dir="ltr"
+                      value={managedPasswordEmail}
+                      onChange={(e) => setManagedPasswordEmail(e.target.value)}
+                      placeholder="name@example.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="managedPassword">كلمة المرور الجديدة</Label>
+                    <Input
+                      id="managedPassword"
+                      type="password"
+                      value={managedPassword}
+                      onChange={(e) => setManagedPassword(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmManagedPassword">تأكيد كلمة المرور</Label>
+                    <Input
+                      id="confirmManagedPassword"
+                      type="password"
+                      value={confirmManagedPassword}
+                      onChange={(e) => setConfirmManagedPassword(e.target.value)}
+                    />
+                  </div>
+                  <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-700">
+                    يمكن لمدير النظام تحديث كلمة مرور أي حساب عبر البريد الإلكتروني المسجل لذلك الحساب.
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                  تعديل كلمات المرور غير متاح من هذا الحساب. عند الحاجة، يرجى التواصل مع مدير النظام لتنفيذ التغيير.
                 </div>
               )}
             </CardContent>
             <CardFooter className="flex justify-end">
-              <Button onClick={changePassword}>تغيير كلمة المرور</Button>
+              {userType === "admin" ? <Button onClick={changePassword}>تحديث كلمة المرور</Button> : null}
             </CardFooter>
           </Card>
         </TabsContent>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, type CSSProperties } from "react"
+import { useEffect, useRef, useState, type CSSProperties } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -17,34 +17,119 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Clock, Filter, Printer, RefreshCw, Save, Search, Plus } from "lucide-react"
+import { Clock, Plus, Printer, RefreshCw, Save, Search } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/components/auth-provider"
-import { fetchScheduleData as fetchScheduleSnapshot, saveScheduleData as saveScheduleSnapshot } from "@/lib/school-api"
+import {
+  fetchScheduleData as fetchScheduleSnapshot,
+  fetchStudents as fetchStudentsData,
+  saveScheduleData as saveScheduleSnapshot,
+} from "@/lib/school-api"
 import {
   defaultPeriodSlots,
   defaultScheduleData,
-  scheduleClasses as classes,
+  scheduleClasses,
   scheduleSubjects as subjects,
-  scheduleTeachers as teachers,
+  type ClassScheduleMap,
   type DaySchedule,
   type PeriodSlot,
 } from "@/lib/school-data"
 
-export default function SchedulePage() {
-  const { toast } = useToast()
-  const { userType, email } = useAuth()
-  const isStudent = userType === "student"
-  const studentEmailToClass: Record<string, string> = {
-    "student@example.com": "1-1",
-    "student2@example.com": "1-2",
+type TeacherOption = {
+  id: string
+  name: string
+}
+
+const fallbackClassNames = scheduleClasses.map((entry) => entry.name)
+const fallbackTeacherOptions: TeacherOption[] = Array.from(
+  new Set(
+    defaultScheduleData.flatMap((day) =>
+      day.periods.map((period) => String(period.teacher || "").trim()).filter(Boolean),
+    ),
+  ),
+).map((teacherName, index) => ({
+  id: `fallback-teacher-${index + 1}`,
+  name: teacherName,
+}))
+
+const cloneScheduleData = (scheduleData: DaySchedule[]) =>
+  scheduleData.map((day) => ({
+    ...day,
+    periods: day.periods.map((period) => ({ ...period })),
+  }))
+
+const buildDefaultClassSchedules = (classNames: string[]) =>
+  Object.fromEntries(classNames.map((className) => [className, cloneScheduleData(defaultScheduleData)])) as ClassScheduleMap
+
+const applyPeriodTimesToSchedule = (scheduleData: DaySchedule[], periodSlots: PeriodSlot[]) =>
+  scheduleData.map((day) => ({
+    ...day,
+    periods: day.periods.map((period) => {
+      const slot = periodSlots.find((entry) => entry.id === period.id)
+      if (!slot || period.subject === "استراحة") {
+        return { ...period }
+      }
+
+      return {
+        ...period,
+        time: `${slot.start} - ${slot.end}`,
+      }
+    }),
+  }))
+
+const getPeriodHeaderLabel = (period: DaySchedule["periods"][number], periodSlots: PeriodSlot[]) => {
+  if (period.subject === "استراحة" || period.id === 4) {
+    return "استراحة"
   }
 
-  // حالات الصفحة
-  const [selectedClass, setSelectedClass] = useState(studentEmailToClass[email || ""] || "1-1")
+  const slot = periodSlots.find((entry) => entry.id === period.id)
+  return slot ? `الحصة ${slot.name}` : `الحصة ${period.id}`
+}
+
+const normalizeSearchTerm = (value: string) => value.trim().toLowerCase()
+const normalizeLookupText = (value: string) => value.replace(/\s+/g, " ").trim().toLowerCase()
+
+const filterScheduleData = (scheduleData: DaySchedule[], selectedTeacher: string, searchTerm: string) => {
+  const normalizedSearchTerm = normalizeSearchTerm(searchTerm)
+
+  return scheduleData.map((day) => ({
+    ...day,
+    periods: day.periods.map((period) => {
+      if (period.subject === "استراحة") {
+        return { ...period }
+      }
+
+      const matchesTeacher = selectedTeacher === "all" || period.teacher === selectedTeacher
+      const matchesSearch =
+        !normalizedSearchTerm ||
+        [period.subject, period.teacher, period.room].some((value) => value.toLowerCase().includes(normalizedSearchTerm))
+
+      if (matchesTeacher && matchesSearch) {
+        return { ...period }
+      }
+
+      return {
+        ...period,
+        subject: "",
+        teacher: "",
+        room: "",
+      }
+    }),
+  }))
+}
+
+export default function SchedulePage() {
+  const { toast } = useToast()
+  const { userType, userName } = useAuth()
+  const isStudent = userType === "student"
+
+  const [selectedClass, setSelectedClass] = useState(fallbackClassNames[0] || "")
   const [selectedTeacher, setSelectedTeacher] = useState("all")
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
-  const [scheduleData, setScheduleData] = useState<DaySchedule[]>(defaultScheduleData)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [classNames, setClassNames] = useState<string[]>(fallbackClassNames)
+  const [teacherOptions, setTeacherOptions] = useState<TeacherOption[]>(fallbackTeacherOptions)
+  const [classSchedules, setClassSchedules] = useState<ClassScheduleMap>(() => buildDefaultClassSchedules(fallbackClassNames))
   const [periodSlots, setPeriodSlots] = useState<PeriodSlot[]>(defaultPeriodSlots)
   const [isSyncing, setIsSyncing] = useState(false)
 
@@ -54,17 +139,18 @@ export default function SchedulePage() {
   const [addEventSubject, setAddEventSubject] = useState("")
   const [addEventTeacher, setAddEventTeacher] = useState("")
   const [addEventRoom, setAddEventRoom] = useState("")
+
   const [isTestLessonDialogOpen, setIsTestLessonDialogOpen] = useState(false)
   const [testLessonDay, setTestLessonDay] = useState("الأحد")
   const [testLessonPeriod, setTestLessonPeriod] = useState("1")
 
-  // حالات مربع حوار تعديل حصة
   const [isEditEventOpen, setIsEditEventOpen] = useState(false)
   const [editEventDay, setEditEventDay] = useState(0)
   const [editEventPeriod, setEditEventPeriod] = useState(0)
   const [editEventSubject, setEditEventSubject] = useState("")
   const [editEventTeacher, setEditEventTeacher] = useState("")
   const [editEventRoom, setEditEventRoom] = useState("")
+
   const printableScheduleRef = useRef<HTMLDivElement | null>(null)
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [highlightedSlot, setHighlightedSlot] = useState<{ dayIndex: number; periodIndex: number } | null>(null)
@@ -94,7 +180,7 @@ export default function SchedulePage() {
 
   const getPeriodCellStyle = (subject: string) =>
     ({
-      backgroundColor: getSubjectColor(subject),
+      backgroundColor: getSubjectColor(subject || "فارغ"),
       WebkitPrintColorAdjust: "exact",
       printColorAdjust: "exact",
     }) as CSSProperties
@@ -104,15 +190,51 @@ export default function SchedulePage() {
 
     void (async () => {
       try {
-        const response = await fetchScheduleSnapshot()
+        const [scheduleResponse, studentsResponse] = await Promise.all([
+          fetchScheduleSnapshot(),
+          isStudent ? fetchStudentsData().catch(() => ({ students: [] })) : Promise.resolve({ students: [] }),
+        ])
         if (!isActive) return
-        setScheduleData(response.scheduleData)
-        setPeriodSlots(response.periodSlots)
+
+        const matchedStudent = studentsResponse.students.find(
+          (student) => normalizeLookupText(student.name) === normalizeLookupText(userName || ""),
+        )
+        const resolvedStudentClass = matchedStudent?.classroom || ""
+        const nextClassNames = scheduleResponse.classNames.length > 0 ? scheduleResponse.classNames : fallbackClassNames
+        const nextTeacherOptions = Array.isArray(scheduleResponse.teacherOptions)
+          ? scheduleResponse.teacherOptions
+          : fallbackTeacherOptions
+        const nextClassSchedules =
+          Object.keys(scheduleResponse.classSchedules || {}).length > 0
+            ? scheduleResponse.classSchedules
+            : buildDefaultClassSchedules(nextClassNames)
+
+        setClassNames(nextClassNames)
+        setTeacherOptions(nextTeacherOptions)
+        setClassSchedules(nextClassSchedules)
+        setPeriodSlots(scheduleResponse.periodSlots)
+        setSelectedTeacher((current) =>
+          current === "all" || nextTeacherOptions.some((teacher) => teacher.name === current) ? current : "all",
+        )
+        setSelectedClass((current) => {
+          const preferredClass =
+            isStudent && resolvedStudentClass && nextClassNames.includes(resolvedStudentClass)
+              ? resolvedStudentClass
+              : current && nextClassNames.includes(current)
+                ? current
+                : nextClassNames[0] || fallbackClassNames[0] || ""
+
+          return preferredClass
+        })
       } catch (error) {
         if (!isActive) return
+        setClassNames(fallbackClassNames)
+        setTeacherOptions(fallbackTeacherOptions)
+        setClassSchedules(buildDefaultClassSchedules(fallbackClassNames))
+        setPeriodSlots(defaultPeriodSlots)
         toast({
           title: "تعذر تحميل الجدول",
-          description: error instanceof Error ? error.message : "تم استخدام الجدول الافتراضي مؤقتًا",
+          description: error instanceof Error ? error.message : "تم استخدام الجداول الافتراضية مؤقتًا",
           variant: "destructive",
         })
       }
@@ -121,7 +243,7 @@ export default function SchedulePage() {
     return () => {
       isActive = false
     }
-  }, [])
+  }, [isStudent, toast, userName])
 
   useEffect(() => {
     return () => {
@@ -143,22 +265,52 @@ export default function SchedulePage() {
     }, 4000)
   }
 
-  const persistSchedule = async (nextSchedule: DaySchedule[], nextPeriodSlots = periodSlots) => {
-    const previousSchedule = scheduleData
+  const currentSchedule = classSchedules[selectedClass] || defaultScheduleData
+  const displayedSchedule = filterScheduleData(currentSchedule, selectedTeacher, searchTerm)
+  const tableHeaderPeriods = currentSchedule[0]?.periods || defaultScheduleData[0]?.periods || []
+  const hasActiveFilters = selectedTeacher !== "all" || normalizeSearchTerm(searchTerm).length > 0
+  const hasVisibleLessons = displayedSchedule.some((day) =>
+    day.periods.some((period) => period.subject && period.subject !== "استراحة"),
+  )
+
+  const persistSchedule = async (
+    nextClassSchedules: ClassScheduleMap,
+    nextPeriodSlots = periodSlots,
+    options?: { successTitle: string; successDescription: string },
+  ) => {
+    const previousClassSchedules = classSchedules
     const previousPeriodSlots = periodSlots
+
+    setClassSchedules(nextClassSchedules)
+    setPeriodSlots(nextPeriodSlots)
     setIsSyncing(true)
 
     try {
-      const response = await saveScheduleSnapshot(nextSchedule, nextPeriodSlots)
-      setScheduleData(response.scheduleData)
+      const response = await saveScheduleSnapshot(nextClassSchedules, nextPeriodSlots)
+      const nextClassNames = response.classNames.length > 0 ? response.classNames : classNames
+      const nextTeacherOptions = Array.isArray(response.teacherOptions) ? response.teacherOptions : teacherOptions
+      const normalizedClassSchedules =
+        Object.keys(response.classSchedules || {}).length > 0 ? response.classSchedules : nextClassSchedules
+
+      setClassNames(nextClassNames)
+      setTeacherOptions(nextTeacherOptions)
+      setClassSchedules(normalizedClassSchedules)
       setPeriodSlots(response.periodSlots)
-      toast({
-        title: "تم الحفظ",
-        description: "تم حفظ الجدول بنجاح",
-      })
+      setSelectedClass((current) => (nextClassNames.includes(current) ? current : nextClassNames[0] || current))
+      setSelectedTeacher((current) =>
+        current === "all" || nextTeacherOptions.some((teacher) => teacher.name === current) ? current : "all",
+      )
+
+      if (options) {
+        toast({
+          title: options.successTitle,
+          description: options.successDescription,
+        })
+      }
+
       return true
     } catch (error) {
-      setScheduleData(previousSchedule)
+      setClassSchedules(previousClassSchedules)
       setPeriodSlots(previousPeriodSlots)
       toast({
         title: "تعذر حفظ الجدول",
@@ -171,43 +323,81 @@ export default function SchedulePage() {
     }
   }
 
-  const applyPeriodTimes = async () => {
-    const updatedSchedule = scheduleData.map((day) => ({
-      ...day,
-      periods: day.periods.map((period) => {
-        const slot = periodSlots.find((s) => s.id === period.id)
-        if (!slot) return period
-        return { ...period, time: `${slot.start} - ${slot.end}` }
-      }),
-    }))
+  const persistSelectedClassSchedule = async (nextSchedule: DaySchedule[]) => {
+    if (!selectedClass) {
+      toast({
+        title: "اختر فصلًا أولًا",
+        description: "لا يمكن تعديل الجدول قبل تحديد الفصل المطلوب",
+        variant: "destructive",
+      })
+      return false
+    }
 
-    setScheduleData(updatedSchedule)
-    const saved = await persistSchedule(updatedSchedule, periodSlots)
-    if (!saved) return
-    toast({
-      title: "تم تحديث الأوقات",
-      description: "تم تطبيق أوقات الحصص الجديدة بنجاح",
+    const nextClassSchedules = {
+      ...classSchedules,
+      [selectedClass]: nextSchedule,
+    }
+
+    return persistSchedule(nextClassSchedules, periodSlots)
+  }
+
+  const applyPeriodTimes = async () => {
+    const updatedClassSchedules = Object.fromEntries(
+      Object.entries(classSchedules).map(([className, scheduleData]) => [
+        className,
+        applyPeriodTimesToSchedule(scheduleData, periodSlots),
+      ]),
+    ) as ClassScheduleMap
+
+    const saved = await persistSchedule(updatedClassSchedules, periodSlots, {
+      successTitle: "تم تحديث الأوقات",
+      successDescription: "تم تطبيق أوقات الحصص الجديدة على جميع الفصول",
     })
+    if (!saved) return
+  }
+
+  const resetAddEventFields = () => {
+    setAddEventDay(currentSchedule[0]?.day || "الأحد")
+    setAddEventPeriod(String(periodSlots[0]?.id || 1))
+    setAddEventSubject("")
+    setAddEventTeacher(selectedTeacher !== "all" ? selectedTeacher : "")
+    setAddEventRoom("")
   }
 
   const openAddLessonDialog = () => {
+    if (!selectedClass) {
+      toast({
+        title: "اختر فصلًا أولًا",
+        description: "حدد الفصل المطلوب قبل إضافة الحصة",
+        variant: "destructive",
+      })
+      return
+    }
+
     resetAddEventFields()
     setIsAddEventOpen(true)
   }
 
   const openTestLessonDialog = () => {
-    setTestLessonDay(scheduleData[0]?.day || "الأحد")
+    if (!selectedClass) {
+      toast({
+        title: "اختر فصلًا أولًا",
+        description: "حدد الفصل المطلوب قبل إضافة الحصة الاختبارية",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setTestLessonDay(currentSchedule[0]?.day || "الأحد")
     setTestLessonPeriod(String(periodSlots[0]?.id || 1))
     setIsTestLessonDialogOpen(true)
   }
 
-  // وظيفة إضافة حصة جديدة
   const handleAddEvent = async () => {
-    // تحويل رقم الحصة إلى رقم
     const periodId = Number.parseInt(addEventPeriod, 10)
+    const nextSchedule = cloneScheduleData(currentSchedule)
+    const dayIndex = nextSchedule.findIndex((day) => day.day === addEventDay)
 
-    // البحث عن اليوم المحدد
-    const dayIndex = scheduleData.findIndex((day) => day.day === addEventDay)
     if (dayIndex === -1) {
       toast({
         title: "خطأ",
@@ -217,8 +407,7 @@ export default function SchedulePage() {
       return
     }
 
-    // البحث عن الحصة المحددة
-    const periodIndex = scheduleData[dayIndex].periods.findIndex((period) => period.id === periodId)
+    const periodIndex = nextSchedule[dayIndex].periods.findIndex((period) => period.id === periodId)
     if (periodIndex === -1) {
       toast({
         title: "خطأ",
@@ -228,7 +417,6 @@ export default function SchedulePage() {
       return
     }
 
-    // التحقق من البيانات
     if (!addEventSubject || !addEventTeacher || !addEventRoom) {
       toast({
         title: "خطأ",
@@ -238,32 +426,25 @@ export default function SchedulePage() {
       return
     }
 
-    // تحديث الجدول
-    const updatedSchedule = [...scheduleData]
-    updatedSchedule[dayIndex].periods[periodIndex] = {
-      ...updatedSchedule[dayIndex].periods[periodIndex],
+    nextSchedule[dayIndex].periods[periodIndex] = {
+      ...nextSchedule[dayIndex].periods[periodIndex],
       subject: addEventSubject,
       teacher: addEventTeacher,
       room: addEventRoom,
     }
 
-    setScheduleData(updatedSchedule)
-    const saved = await persistSchedule(updatedSchedule)
+    const saved = await persistSelectedClassSchedule(nextSchedule)
     if (!saved) return
 
-    // إغلاق مربع الحوار وإعادة تعيين الحقول
     setIsAddEventOpen(false)
     resetAddEventFields()
-
     toast({
       title: "تمت الإضافة",
-      description: `تمت إضافة حصة ${addEventSubject} بنجاح`,
+      description: `تمت إضافة حصة ${addEventSubject} إلى فصل ${selectedClass}`,
     })
   }
 
-  // وظيفة تعديل حصة
   const handleEditEvent = async () => {
-    // التحقق من البيانات
     if (!editEventSubject || !editEventTeacher || !editEventRoom) {
       toast({
         title: "خطأ",
@@ -273,56 +454,42 @@ export default function SchedulePage() {
       return
     }
 
-    // تحديث الجدول
-    const updatedSchedule = [...scheduleData]
-    updatedSchedule[editEventDay].periods[editEventPeriod] = {
-      ...updatedSchedule[editEventDay].periods[editEventPeriod],
+    const nextSchedule = cloneScheduleData(currentSchedule)
+    nextSchedule[editEventDay].periods[editEventPeriod] = {
+      ...nextSchedule[editEventDay].periods[editEventPeriod],
       subject: editEventSubject,
       teacher: editEventTeacher,
       room: editEventRoom,
     }
 
-    setScheduleData(updatedSchedule)
-    const saved = await persistSchedule(updatedSchedule)
+    const saved = await persistSelectedClassSchedule(nextSchedule)
     if (!saved) return
 
-    // إغلاق مربع الحوار
     setIsEditEventOpen(false)
-
     toast({
       title: "تم التعديل",
-      description: `تم تعديل حصة ${editEventSubject} بنجاح`,
+      description: `تم تعديل الحصة في فصل ${selectedClass} بنجاح`,
     })
   }
 
-  // وظيفة فتح مربع حوار تعديل الحصة
   const openEditDialog = (dayIndex: number, periodIndex: number) => {
-    const period = scheduleData[dayIndex].periods[periodIndex]
+    const period = currentSchedule[dayIndex].periods[periodIndex]
 
     setEditEventDay(dayIndex)
     setEditEventPeriod(periodIndex)
     setEditEventSubject(period.subject)
     setEditEventTeacher(period.teacher)
     setEditEventRoom(period.room)
-
     setIsEditEventOpen(true)
   }
 
-  // وظيفة إعادة تعيين حقول إضافة الحصة
-  const resetAddEventFields = () => {
-    setAddEventDay("الأحد")
-    setAddEventPeriod("1")
-    setAddEventSubject("")
-    setAddEventTeacher("")
-    setAddEventRoom("")
-  }
-
-  // وظيفة حفظ الجدول كاملاً
   const saveFullSchedule = async () => {
-    await persistSchedule(scheduleData)
+    await persistSchedule(classSchedules, periodSlots, {
+      successTitle: "تم الحفظ",
+      successDescription: "تم حفظ جميع الجداول الدراسية بنجاح",
+    })
   }
 
-  // وظيفة طباعة الجدول
   const handlePrint = () => {
     if (!printableScheduleRef.current) return
 
@@ -333,9 +500,6 @@ export default function SchedulePage() {
       .map((node) => node.outerHTML)
       .join("")
 
-    const className = classes.find((c) => c.id === selectedClass)?.name || "جميع الفصول"
-    const teacherName = selectedTeacher !== "all" ? teachers.find((t) => t.id === selectedTeacher)?.name || "" : ""
-
     printWindow.document.open()
     printWindow.document.write(`
       <!doctype html>
@@ -343,7 +507,7 @@ export default function SchedulePage() {
         <head>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <title>جدول الحصص - ${className}</title>
+          <title>جدول الحصص - ${selectedClass}</title>
           ${styles}
           <style>
             @page { size: A4 landscape; margin: 10mm; }
@@ -366,7 +530,7 @@ export default function SchedulePage() {
           <div class="print-wrapper">
             <div class="print-heading">
               <h1>جدول الحصص الأسبوعي</h1>
-              <p>${className}${teacherName ? ` - ${teacherName}` : ""}</p>
+              <p>${selectedClass}${selectedTeacher !== "all" ? ` - ${selectedTeacher}` : ""}</p>
             </div>
             ${printableScheduleRef.current.innerHTML}
           </div>
@@ -381,10 +545,10 @@ export default function SchedulePage() {
     }, 250)
   }
 
-  // وظيفة إضافة حصة اختبارية سريعة
   const addTestLesson = async () => {
     const periodId = Number.parseInt(testLessonPeriod, 10)
-    const dayIndex = scheduleData.findIndex((day) => day.day === testLessonDay)
+    const nextSchedule = cloneScheduleData(currentSchedule)
+    const dayIndex = nextSchedule.findIndex((day) => day.day === testLessonDay)
 
     if (dayIndex === -1) {
       toast({
@@ -395,7 +559,7 @@ export default function SchedulePage() {
       return
     }
 
-    const periodIndex = scheduleData[dayIndex].periods.findIndex((period) => period.id === periodId)
+    const periodIndex = nextSchedule[dayIndex].periods.findIndex((period) => period.id === periodId)
     if (periodIndex === -1) {
       toast({
         title: "خطأ",
@@ -405,7 +569,7 @@ export default function SchedulePage() {
       return
     }
 
-    const targetSlot = scheduleData[dayIndex].periods[periodIndex]
+    const targetSlot = nextSchedule[dayIndex].periods[periodIndex]
     if (targetSlot.subject === "استراحة") {
       toast({
         title: "خطأ",
@@ -415,35 +579,28 @@ export default function SchedulePage() {
       return
     }
 
-    const selectedTeacherName =
-      selectedTeacher !== "all"
-        ? teachers.find((teacher) => teacher.id === selectedTeacher)?.name || teachers[0].name
-        : ""
-    const teacherName = selectedTeacherName || targetSlot.teacher || teachers[0].name
+    const teacherName = selectedTeacher !== "all" ? selectedTeacher : targetSlot.teacher || teacherOptions[0]?.name || ""
     const roomName = targetSlot.room || "T-01"
     const replacedSubject = targetSlot.subject
 
-    const updatedSchedule = [...scheduleData]
-    updatedSchedule[dayIndex].periods[periodIndex] = {
-      ...updatedSchedule[dayIndex].periods[periodIndex],
+    nextSchedule[dayIndex].periods[periodIndex] = {
+      ...targetSlot,
       subject: "حصة اختبارية",
       teacher: teacherName,
       room: roomName,
     }
 
-    setScheduleData(updatedSchedule)
-    const saved = await persistSchedule(updatedSchedule)
+    const saved = await persistSelectedClassSchedule(nextSchedule)
     if (!saved) return
 
     markSlotAsHighlighted(dayIndex, periodIndex)
     setIsTestLessonDialogOpen(false)
-
     toast({
       title: "تمت الإضافة",
       description:
         replacedSubject && replacedSubject !== "حصة اختبارية"
-          ? `تم استبدال ${replacedSubject} بحصة اختبارية في ${scheduleData[dayIndex].day} - ${targetSlot.time}`
-          : `تمت إضافة حصة اختبارية في ${scheduleData[dayIndex].day} - ${targetSlot.time}`,
+          ? `تم استبدال ${replacedSubject} بحصة اختبارية في فصل ${selectedClass}`
+          : `تمت إضافة حصة اختبارية إلى فصل ${selectedClass}`,
     })
   }
 
@@ -452,11 +609,24 @@ export default function SchedulePage() {
       setIsSyncing(true)
       try {
         const response = await fetchScheduleSnapshot()
-        setScheduleData(response.scheduleData)
+        const nextClassNames = response.classNames.length > 0 ? response.classNames : fallbackClassNames
+        const nextTeacherOptions = Array.isArray(response.teacherOptions) ? response.teacherOptions : fallbackTeacherOptions
+        const nextClassSchedules =
+          Object.keys(response.classSchedules || {}).length > 0
+            ? response.classSchedules
+            : buildDefaultClassSchedules(nextClassNames)
+
+        setClassNames(nextClassNames)
+        setTeacherOptions(nextTeacherOptions)
+        setClassSchedules(nextClassSchedules)
         setPeriodSlots(response.periodSlots)
+        setSelectedClass((current) => (nextClassNames.includes(current) ? current : nextClassNames[0] || current))
+        setSelectedTeacher((current) =>
+          current === "all" || nextTeacherOptions.some((teacher) => teacher.name === current) ? current : "all",
+        )
         toast({
           title: "تم تحديث الجدول",
-          description: "تم تحميل أحدث نسخة من الجدول الدراسي",
+          description: "تم تحميل أحدث الجداول الدراسية",
         })
       } catch (error) {
         toast({
@@ -471,16 +641,16 @@ export default function SchedulePage() {
   }
 
   const selectedTestLessonSlot =
-    scheduleData.find((day) => day.day === testLessonDay)?.periods.find((period) => period.id === Number.parseInt(testLessonPeriod, 10)) ||
+    currentSchedule.find((day) => day.day === testLessonDay)?.periods.find((period) => period.id === Number.parseInt(testLessonPeriod, 10)) ||
     null
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+    <div className="container mx-auto space-y-6 p-4">
+      <div className="mb-6 flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-3xl font-bold mb-2">الجدول الدراسي</h1>
+          <h1 className="mb-2 text-3xl font-bold">الجدول الدراسي</h1>
           <p className="text-muted-foreground">
-            {isStudent ? "عرض الجدول الدراسي الخاص بالطالبة" : "إدارة وعرض الجداول الدراسية للفصول والمعلمين"}
+            {isStudent ? "عرض الجدول الدراسي الخاص بالفصل المسند للطالبة" : "إدارة الجداول الدراسية الخاصة بكل فصل"}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -488,7 +658,7 @@ export default function SchedulePage() {
             <RefreshCw className="h-4 w-4" />
             تحديث
           </Button>
-          <Button variant="outline" className="flex items-center gap-2" onClick={handlePrint}>
+          <Button variant="outline" className="flex items-center gap-2" onClick={handlePrint} disabled={!selectedClass}>
             <Printer className="h-4 w-4" />
             طباعة
           </Button>
@@ -496,7 +666,7 @@ export default function SchedulePage() {
             <>
               <Button variant="outline" className="flex items-center gap-2" onClick={saveFullSchedule} disabled={isSyncing}>
                 <Save className="h-4 w-4" />
-                حفظ الجدول
+                حفظ الكل
               </Button>
               <Button variant="outline" className="flex items-center gap-2" onClick={openTestLessonDialog} disabled={isSyncing}>
                 <Plus className="h-4 w-4" />
@@ -515,17 +685,16 @@ export default function SchedulePage() {
         </div>
       </div>
 
-      {/* نموذج إضافة حصة مبسط */}
       {!isStudent && (
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>إعداد أوقات الحصص</CardTitle>
-            <CardDescription>يمكنك تعديل وقت كل حصة ثم الضغط على تطبيق الأوقات</CardDescription>
+            <CardDescription>أوقات الحصص عامة على مستوى المدرسة، ويمكنك تطبيقها على جميع الجداول دفعة واحدة.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
               {periodSlots.map((slot, index) => (
-                <div key={slot.id} className="border rounded-md p-3 space-y-2">
+                <div key={slot.id} className="space-y-2 rounded-md border p-3">
                   <p className="font-medium">الحصة {slot.name}</p>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
@@ -533,10 +702,10 @@ export default function SchedulePage() {
                       <Input
                         type="time"
                         value={slot.start}
-                        onChange={(e) => {
-                          const next = [...periodSlots]
-                          next[index] = { ...next[index], start: e.target.value }
-                          setPeriodSlots(next)
+                        onChange={(event) => {
+                          const nextSlots = [...periodSlots]
+                          nextSlots[index] = { ...nextSlots[index], start: event.target.value }
+                          setPeriodSlots(nextSlots)
                         }}
                       />
                     </div>
@@ -545,10 +714,10 @@ export default function SchedulePage() {
                       <Input
                         type="time"
                         value={slot.end}
-                        onChange={(e) => {
-                          const next = [...periodSlots]
-                          next[index] = { ...next[index], end: e.target.value }
-                          setPeriodSlots(next)
+                        onChange={(event) => {
+                          const nextSlots = [...periodSlots]
+                          nextSlots[index] = { ...nextSlots[index], end: event.target.value }
+                          setPeriodSlots(nextSlots)
                         }}
                       />
                     </div>
@@ -556,50 +725,46 @@ export default function SchedulePage() {
                 </div>
               ))}
             </div>
-            <Button className="mt-4 bg-[#0a8a74] hover:bg-[#097a67]" onClick={applyPeriodTimes}>
+            <Button className="mt-4 bg-[#0a8a74] hover:bg-[#097a67]" onClick={applyPeriodTimes} disabled={isSyncing}>
               تطبيق الأوقات
             </Button>
           </CardContent>
         </Card>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         <Card className="md:col-span-2">
           <CardHeader>
             <CardTitle>فلترة الجدول</CardTitle>
-            <CardDescription>اختر الفصل أو المعلم لعرض الجدول الخاص به</CardDescription>
+            <CardDescription>اختر الفصل المطلوب، ثم ضيّق العرض حسب المعلمة أو بالبحث داخل الجدول.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex flex-col gap-4 md:flex-row">
               <div className="flex-1 space-y-2">
                 <Label htmlFor="class">الفصل</Label>
-                <Select
-                  value={selectedClass}
-                  onValueChange={setSelectedClass}
-                  disabled={isStudent}
-                >
+                <Select value={selectedClass} onValueChange={setSelectedClass} disabled={isStudent}>
                   <SelectTrigger id="class">
                     <SelectValue placeholder="اختر الفصل" />
                   </SelectTrigger>
                   <SelectContent>
-                    {classes.map((cls) => (
-                      <SelectItem key={cls.id} value={cls.id}>
-                        {cls.name}
+                    {classNames.map((className) => (
+                      <SelectItem key={className} value={className}>
+                        {className}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="flex-1 space-y-2">
-                <Label htmlFor="teacher">المعلم</Label>
+                <Label htmlFor="teacher">المعلمة</Label>
                 <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
                   <SelectTrigger id="teacher">
-                    <SelectValue placeholder="اختر المعلم" />
+                    <SelectValue placeholder="اختر المعلمة" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">جميع المعلمين</SelectItem>
-                    {teachers.map((teacher) => (
-                      <SelectItem key={teacher.id} value={teacher.id}>
+                    <SelectItem value="all">جميع المعلمات</SelectItem>
+                    {teacherOptions.map((teacher) => (
+                      <SelectItem key={teacher.id} value={teacher.name}>
                         {teacher.name}
                       </SelectItem>
                     ))}
@@ -610,7 +775,13 @@ export default function SchedulePage() {
                 <Label htmlFor="search">بحث</Label>
                 <div className="relative">
                   <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input id="search" placeholder="ابحث عن مادة أو قاعة..." className="pl-10" />
+                  <Input
+                    id="search"
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    placeholder="ابحث عن مادة أو معلمة أو قاعة..."
+                    className="pl-10"
+                  />
                 </div>
               </div>
             </div>
@@ -620,7 +791,7 @@ export default function SchedulePage() {
         <Card>
           <CardHeader>
             <CardTitle>التقويم</CardTitle>
-            <CardDescription>عرض الجدول حسب التاريخ</CardDescription>
+            <CardDescription>عرض التاريخ الحالي بجانب الجدول</CardDescription>
           </CardHeader>
           <CardContent>
             <Calendar mode="single" selected={selectedDate} onSelect={setSelectedDate} className="rounded-md border" />
@@ -628,87 +799,93 @@ export default function SchedulePage() {
         </Card>
       </div>
 
+      {!hasVisibleLessons && (
+        <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          لا توجد حصص مطابقة للفلاتر الحالية داخل فصل {selectedClass || "المحدد"}.
+        </div>
+      )}
+
       <Tabs defaultValue="table" className="w-full">
-        <TabsList className="grid w-full md:w-[400px] grid-cols-2">
+        <TabsList className="grid w-full grid-cols-2 md:w-[400px]">
           <TabsTrigger value="table">عرض جدول</TabsTrigger>
           <TabsTrigger value="grid">عرض شبكة</TabsTrigger>
         </TabsList>
+
         <TabsContent value="table" className="mt-6">
-          <Card ref={printableScheduleRef}>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>جدول الحصص الأسبوعي</CardTitle>
-                <CardDescription>
-                  {classes.find((c) => c.id === selectedClass)?.name || "جميع الفصول"}
-                  {selectedTeacher !== "all" && ` - ${teachers.find((t) => t.id === selectedTeacher)?.name || ""}`}
-                </CardDescription>
-              </div>
-              <Button variant="outline" size="sm" className="flex items-center gap-2 no-print">
-                <Filter className="h-4 w-4" />
-                فلترة متقدمة
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[100px]">اليوم</TableHead>
-                      <TableHead>الحصة 1</TableHead>
-                      <TableHead>الحصة 2</TableHead>
-                      <TableHead>الحصة 3</TableHead>
-                      <TableHead>استراحة</TableHead>
-                      <TableHead>الحصة 4</TableHead>
-                      <TableHead>الحصة 5</TableHead>
-                      <TableHead>الحصة 6</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {scheduleData.map((day, dayIndex) => (
-                      <TableRow key={day.id}>
-                        <TableCell className="font-medium">{day.day}</TableCell>
-                        {day.periods.map((period, periodIndex) => (
-                          <TableCell
-                            key={period.id}
-                            style={getPeriodCellStyle(period.subject)}
-                            className={`text-slate-900 transition-all ${
-                              highlightedSlot?.dayIndex === dayIndex && highlightedSlot?.periodIndex === periodIndex
-                                ? "ring-2 ring-emerald-600 ring-inset shadow-[0_0_0_2px_rgba(5,150,105,0.2)]"
-                                : ""
-                            }`}
-                          >
-                            {period.subject !== "استراحة" ? (
-                              <div className="text-xs">
-                                <div className="font-medium">{period.subject}</div>
-                                <div className="text-muted-foreground">{period.teacher}</div>
-                                <div className="text-muted-foreground">قاعة: {period.room}</div>
-                                {!isStudent && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="mt-1 h-6 w-full text-xs no-print"
-                                    onClick={() => openEditDialog(dayIndex, periodIndex)}
-                                  >
-                                    تعديل
-                                  </Button>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="text-center font-medium text-muted-foreground">استراحة</div>
-                            )}
-                          </TableCell>
+          <div ref={printableScheduleRef}>
+            <Card>
+              <CardHeader>
+                <div>
+                  <CardTitle>جدول الحصص الأسبوعي</CardTitle>
+                  <CardDescription>
+                    {selectedClass || "لا يوجد فصل محدد"}
+                    {selectedTeacher !== "all" && ` - ${selectedTeacher}`}
+                  </CardDescription>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[100px]">اليوم</TableHead>
+                        {tableHeaderPeriods.map((period) => (
+                          <TableHead key={`header-${period.id}`}>{getPeriodHeaderLabel(period, periodSlots)}</TableHead>
                         ))}
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {displayedSchedule.map((day, dayIndex) => (
+                        <TableRow key={day.id}>
+                          <TableCell className="font-medium">{day.day}</TableCell>
+                          {day.periods.map((period, periodIndex) => (
+                            <TableCell
+                              key={period.id}
+                              style={getPeriodCellStyle(period.subject)}
+                              className={`text-slate-900 transition-all ${
+                                highlightedSlot?.dayIndex === dayIndex && highlightedSlot?.periodIndex === periodIndex
+                                  ? "ring-2 ring-emerald-600 ring-inset shadow-[0_0_0_2px_rgba(5,150,105,0.2)]"
+                                  : ""
+                              }`}
+                            >
+                              {period.subject === "استراحة" ? (
+                                <div className="text-center font-medium text-muted-foreground">استراحة</div>
+                              ) : period.subject ? (
+                                <div className="text-xs">
+                                  <div className="font-medium">{period.subject}</div>
+                                  <div className="text-muted-foreground">{period.teacher}</div>
+                                  <div className="text-muted-foreground">قاعة: {period.room}</div>
+                                  {!isStudent && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="no-print mt-1 h-6 w-full text-xs"
+                                      onClick={() => openEditDialog(dayIndex, periodIndex)}
+                                    >
+                                      تعديل
+                                    </Button>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="py-3 text-center text-xs text-muted-foreground">
+                                  {hasActiveFilters ? "لا توجد حصة مطابقة" : "لا توجد حصة"}
+                                </div>
+                              )}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
+
         <TabsContent value="grid" className="mt-6">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            {scheduleData.map((day, dayIndex) => (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+            {displayedSchedule.map((day, dayIndex) => (
               <Card key={day.id} className="overflow-hidden">
                 <CardHeader className="bg-primary/10 py-3">
                   <CardTitle className="text-center text-lg">{day.day}</CardTitle>
@@ -727,7 +904,9 @@ export default function SchedulePage() {
                         }`}
                       >
                         <div className="text-xs text-muted-foreground">{period.time}</div>
-                        {period.subject !== "استراحة" ? (
+                        {period.subject === "استراحة" ? (
+                          <div className="py-2 text-center font-medium">استراحة</div>
+                        ) : period.subject ? (
                           <>
                             <div className="font-medium">{period.subject}</div>
                             <div className="text-sm text-muted-foreground">{period.teacher}</div>
@@ -744,7 +923,9 @@ export default function SchedulePage() {
                             )}
                           </>
                         ) : (
-                          <div className="font-medium text-center py-2">استراحة</div>
+                          <div className="py-2 text-center text-sm text-muted-foreground">
+                            {hasActiveFilters ? "لا توجد حصة مطابقة" : "لا توجد حصة"}
+                          </div>
                         )}
                       </div>
                     ))}
@@ -756,224 +937,229 @@ export default function SchedulePage() {
         </TabsContent>
       </Tabs>
 
-      {!isStudent && <Dialog open={isTestLessonDialogOpen} onOpenChange={setIsTestLessonDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>إضافة حصة اختبارية</DialogTitle>
-            <DialogDescription>اختر اليوم والحصة من القائمة ليتم وضع الحصة الاختبارية في المكان الذي تحدده.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="test-day" className="text-right">
-                اليوم
-              </Label>
-              <Select value={testLessonDay} onValueChange={setTestLessonDay}>
-                <SelectTrigger id="test-day" className="col-span-3">
-                  <SelectValue placeholder="اختر اليوم" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="الأحد">الأحد</SelectItem>
-                  <SelectItem value="الاثنين">الاثنين</SelectItem>
-                  <SelectItem value="الثلاثاء">الثلاثاء</SelectItem>
-                  <SelectItem value="الأربعاء">الأربعاء</SelectItem>
-                  <SelectItem value="الخميس">الخميس</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="test-period" className="text-right">
-                الحصة
-              </Label>
-              <Select value={testLessonPeriod} onValueChange={setTestLessonPeriod}>
-                <SelectTrigger id="test-period" className="col-span-3">
-                  <SelectValue placeholder="اختر الحصة" />
-                </SelectTrigger>
-                <SelectContent>
-                  {periodSlots.map((slot) => (
-                    <SelectItem key={slot.id} value={String(slot.id)}>
-                      {slot.name} ({slot.start} - {slot.end})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {selectedTestLessonSlot && (
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                <p className="font-medium text-slate-900">معاينة الحصة</p>
-                <p>الوقت: {selectedTestLessonSlot.time}</p>
-                <p>المادة الحالية: {selectedTestLessonSlot.subject || "فارغة"}</p>
-                <p>المعلم: {selectedTestLessonSlot.teacher || "غير محدد"}</p>
+      {!isStudent && (
+        <Dialog open={isTestLessonDialogOpen} onOpenChange={setIsTestLessonDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>إضافة حصة اختبارية</DialogTitle>
+              <DialogDescription>سيتم إضافة الحصة الاختبارية إلى الفصل المحدد حالياً: {selectedClass}</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="test-day" className="text-right">
+                  اليوم
+                </Label>
+                <Select value={testLessonDay} onValueChange={setTestLessonDay}>
+                  <SelectTrigger id="test-day" className="col-span-3">
+                    <SelectValue placeholder="اختر اليوم" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {currentSchedule.map((day) => (
+                      <SelectItem key={day.id} value={day.day}>
+                        {day.day}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setIsTestLessonDialogOpen(false)}>
-              إلغاء
-            </Button>
-            <Button type="submit" onClick={addTestLesson} className="bg-[#0a8a74] hover:bg-[#097a67]">
-              إضافة الحصة الاختبارية
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="test-period" className="text-right">
+                  الحصة
+                </Label>
+                <Select value={testLessonPeriod} onValueChange={setTestLessonPeriod}>
+                  <SelectTrigger id="test-period" className="col-span-3">
+                    <SelectValue placeholder="اختر الحصة" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {periodSlots.map((slot) => (
+                      <SelectItem key={slot.id} value={String(slot.id)}>
+                        {slot.name} ({slot.start} - {slot.end})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {selectedTestLessonSlot && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                  <p className="font-medium text-slate-900">معاينة الحصة</p>
+                  <p>الوقت: {selectedTestLessonSlot.time}</p>
+                  <p>المادة الحالية: {selectedTestLessonSlot.subject || "فارغة"}</p>
+                  <p>المعلمة: {selectedTestLessonSlot.teacher || "غير محددة"}</p>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsTestLessonDialogOpen(false)}>
+                إلغاء
+              </Button>
+              <Button type="submit" onClick={addTestLesson} className="bg-[#0a8a74] hover:bg-[#097a67]">
+                إضافة الحصة الاختبارية
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
-      {!isStudent && <Dialog open={isAddEventOpen} onOpenChange={setIsAddEventOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>إضافة حصة جديدة</DialogTitle>
-            <DialogDescription>أدخل بيانات الحصة ثم اضغط إضافة.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="add-day" className="text-right">
-                اليوم
-              </Label>
-              <Select value={addEventDay} onValueChange={setAddEventDay}>
-                <SelectTrigger id="add-day" className="col-span-3">
-                  <SelectValue placeholder="اختر اليوم" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="الأحد">الأحد</SelectItem>
-                  <SelectItem value="الاثنين">الاثنين</SelectItem>
-                  <SelectItem value="الثلاثاء">الثلاثاء</SelectItem>
-                  <SelectItem value="الأربعاء">الأربعاء</SelectItem>
-                  <SelectItem value="الخميس">الخميس</SelectItem>
-                </SelectContent>
-              </Select>
+      {!isStudent && (
+        <Dialog open={isAddEventOpen} onOpenChange={setIsAddEventOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>إضافة حصة جديدة</DialogTitle>
+              <DialogDescription>ستُضاف الحصة إلى جدول فصل {selectedClass}.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="add-day" className="text-right">
+                  اليوم
+                </Label>
+                <Select value={addEventDay} onValueChange={setAddEventDay}>
+                  <SelectTrigger id="add-day" className="col-span-3">
+                    <SelectValue placeholder="اختر اليوم" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {currentSchedule.map((day) => (
+                      <SelectItem key={day.id} value={day.day}>
+                        {day.day}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="add-period" className="text-right">
+                  الحصة
+                </Label>
+                <Select value={addEventPeriod} onValueChange={setAddEventPeriod}>
+                  <SelectTrigger id="add-period" className="col-span-3">
+                    <SelectValue placeholder="اختر الحصة" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {periodSlots.map((slot) => (
+                      <SelectItem key={slot.id} value={String(slot.id)}>
+                        {slot.name} ({slot.start} - {slot.end})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="add-subject" className="text-right">
+                  المادة
+                </Label>
+                <Select value={addEventSubject} onValueChange={setAddEventSubject}>
+                  <SelectTrigger id="add-subject" className="col-span-3">
+                    <SelectValue placeholder="اختر المادة" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {subjects.map((subject) => (
+                      <SelectItem key={subject} value={subject}>
+                        {subject}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="add-teacher" className="text-right">
+                  المعلمة
+                </Label>
+                <Select value={addEventTeacher} onValueChange={setAddEventTeacher}>
+                  <SelectTrigger id="add-teacher" className="col-span-3">
+                    <SelectValue placeholder="اختر المعلمة" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teacherOptions.map((teacher) => (
+                      <SelectItem key={teacher.id} value={teacher.name}>
+                        {teacher.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="add-room" className="text-right">
+                  القاعة
+                </Label>
+                <Input
+                  id="add-room"
+                  value={addEventRoom}
+                  onChange={(event) => setAddEventRoom(event.target.value)}
+                  className="col-span-3"
+                  placeholder="رقم القاعة"
+                />
+              </div>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="add-period" className="text-right">
-                الحصة
-              </Label>
-              <Select value={addEventPeriod} onValueChange={setAddEventPeriod}>
-                <SelectTrigger id="add-period" className="col-span-3">
-                  <SelectValue placeholder="اختر الحصة" />
-                </SelectTrigger>
-                <SelectContent>
-                  {periodSlots.map((slot) => (
-                    <SelectItem key={slot.id} value={String(slot.id)}>
-                      {slot.name} ({slot.start} - {slot.end})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="add-subject" className="text-right">
-                المادة
-              </Label>
-              <Select value={addEventSubject} onValueChange={setAddEventSubject}>
-                <SelectTrigger id="add-subject" className="col-span-3">
-                  <SelectValue placeholder="اختر المادة" />
-                </SelectTrigger>
-                <SelectContent>
-                  {subjects.map((subject) => (
-                    <SelectItem key={subject} value={subject}>
-                      {subject}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="add-teacher" className="text-right">
-                المعلم
-              </Label>
-              <Select value={addEventTeacher} onValueChange={setAddEventTeacher}>
-                <SelectTrigger id="add-teacher" className="col-span-3">
-                  <SelectValue placeholder="اختر المعلم" />
-                </SelectTrigger>
-                <SelectContent>
-                  {teachers.map((teacher) => (
-                    <SelectItem key={teacher.id} value={teacher.name}>
-                      {teacher.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="add-room" className="text-right">
-                القاعة
-              </Label>
-              <Input
-                id="add-room"
-                value={addEventRoom}
-                onChange={(e) => setAddEventRoom(e.target.value)}
-                className="col-span-3"
-                placeholder="رقم القاعة"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="submit" onClick={handleAddEvent} className="bg-[#0a8a74] hover:bg-[#097a67]">
-              إضافة الحصة
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>}
+            <DialogFooter>
+              <Button type="submit" onClick={handleAddEvent} className="bg-[#0a8a74] hover:bg-[#097a67]">
+                إضافة الحصة
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
-      {/* مربع حوار تعديل الحصة */}
-      {!isStudent && <Dialog open={isEditEventOpen} onOpenChange={setIsEditEventOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>تعديل الحصة</DialogTitle>
-            <DialogDescription>قم بتعديل بيانات الحصة. اضغط حفظ عند الانتهاء.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-subject" className="text-right">
-                المادة
-              </Label>
-              <Select value={editEventSubject} onValueChange={setEditEventSubject}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="اختر المادة" />
-                </SelectTrigger>
-                <SelectContent>
-                  {subjects.map((subject) => (
-                    <SelectItem key={subject} value={subject}>
-                      {subject}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+      {!isStudent && (
+        <Dialog open={isEditEventOpen} onOpenChange={setIsEditEventOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>تعديل الحصة</DialogTitle>
+              <DialogDescription>سيتم حفظ التعديل داخل جدول فصل {selectedClass}.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-subject" className="text-right">
+                  المادة
+                </Label>
+                <Select value={editEventSubject} onValueChange={setEditEventSubject}>
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="اختر المادة" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {subjects.map((subject) => (
+                      <SelectItem key={subject} value={subject}>
+                        {subject}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-teacher" className="text-right">
+                  المعلمة
+                </Label>
+                <Select value={editEventTeacher} onValueChange={setEditEventTeacher}>
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="اختر المعلمة" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teacherOptions.map((teacher) => (
+                      <SelectItem key={teacher.id} value={teacher.name}>
+                        {teacher.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-room" className="text-right">
+                  القاعة
+                </Label>
+                <Input
+                  id="edit-room"
+                  value={editEventRoom}
+                  onChange={(event) => setEditEventRoom(event.target.value)}
+                  className="col-span-3"
+                />
+              </div>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-teacher" className="text-right">
-                المعلم
-              </Label>
-              <Select value={editEventTeacher} onValueChange={setEditEventTeacher}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="اختر المعلم" />
-                </SelectTrigger>
-                <SelectContent>
-                  {teachers.map((teacher) => (
-                    <SelectItem key={teacher.id} value={teacher.name}>
-                      {teacher.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-room" className="text-right">
-                القاعة
-              </Label>
-              <Input
-                id="edit-room"
-                value={editEventRoom}
-                onChange={(e) => setEditEventRoom(e.target.value)}
-                className="col-span-3"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="submit" onClick={handleEditEvent} className="bg-[#0a8a74] hover:bg-[#097a67]">
-              حفظ التغييرات
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>}
+            <DialogFooter>
+              <Button type="submit" onClick={handleEditEvent} className="bg-[#0a8a74] hover:bg-[#097a67]">
+                حفظ التغييرات
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   )
 }

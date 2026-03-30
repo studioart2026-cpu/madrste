@@ -295,16 +295,16 @@ export default function NotesPage() {
   }
 
   return (
-    <div className="container mx-auto py-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">إدارة الملاحظات</h1>
-        <div className="flex items-center gap-4">
+    <div className="container mx-auto py-6" dir="rtl">
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <h1 className="text-right text-3xl font-bold">إدارة الملاحظات</h1>
+        <div className="flex flex-col-reverse gap-4 md:flex-row md:items-center">
           <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute right-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
               placeholder="بحث..."
-              className="w-64 pl-8 rtl:pr-8 rtl:pl-4"
+              className="w-full pr-8 md:w-64"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -312,17 +312,17 @@ export default function NotesPage() {
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
               <Button>
-                <PlusCircle className="mr-2 h-4 w-4" />
+                <PlusCircle className="ml-2 h-4 w-4" />
                 إضافة ملاحظة
               </Button>
             </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
+            <DialogContent dir="rtl">
+              <DialogHeader className="text-right">
                 <DialogTitle>إضافة ملاحظة جديدة</DialogTitle>
                 <DialogDescription>أدخل معلومات الملاحظة الجديدة هنا. اضغط على حفظ عند الانتهاء.</DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
+              <div className="grid gap-4 py-4 text-right">
+                <div className="grid gap-2 text-right">
                   <Label htmlFor="title">العنوان</Label>
                   <Input
                     id="title"
@@ -330,7 +330,7 @@ export default function NotesPage() {
                     onChange={(e) => setNewNote({ ...newNote, title: e.target.value })}
                   />
                 </div>
-                <div className="grid gap-2">
+                <div className="grid gap-2 text-right">
                   <Label htmlFor="content">المحتوى</Label>
                   <Textarea
                     id="content"
@@ -339,7 +339,7 @@ export default function NotesPage() {
                     onChange={(e) => setNewNote({ ...newNote, content: e.target.value })}
                   />
                 </div>
-                <div className="grid gap-2">
+                <div className="grid gap-2 text-right">
                   <Label htmlFor="image">الصور (اختياري)</Label>
                   <div className="flex items-center gap-2">
                     <Button
@@ -348,7 +348,7 @@ export default function NotesPage() {
                       onClick={() => document.getElementById("image-upload")?.click()}
                       className="w-full"
                     >
-                      <ImageIcon className="mr-2 h-4 w-4" />
+                      <ImageIcon className="ml-2 h-4 w-4" />
                       تحميل صور
                     </Button>
                     <input
@@ -376,7 +376,7 @@ export default function NotesPage() {
                               type="button"
                               variant="destructive"
                               size="icon"
-                              className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="absolute left-1 top-1 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 removeImage(index)
@@ -391,7 +391,7 @@ export default function NotesPage() {
                   )}
                 </div>
               </div>
-              <DialogFooter>
+              <DialogFooter className="flex-row-reverse">
                 <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                   إلغاء
                 </Button>
@@ -402,38 +402,40 @@ export default function NotesPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" dir="rtl">
         {filteredNotes.map((note) => (
           <Card key={note.id}>
             <CardHeader className="pb-2">
-              <div className="flex justify-between items-start">
-                <CardTitle>{note.title}</CardTitle>
+              <div className="flex items-start justify-between gap-3">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="h-8 w-8 p-0">
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
+                  <DropdownMenuContent align="start">
                     <DropdownMenuItem
                       onClick={() => {
                         setEditingNote(note)
                         setIsEditDialogOpen(true)
                       }}
                     >
-                      <Pencil className="mr-2 h-4 w-4" />
+                      <Pencil className="ml-2 h-4 w-4" />
                       تعديل
                     </DropdownMenuItem>
                     <DropdownMenuItem className="text-red-600" onClick={() => void handleDeleteNote(note.id)}>
-                      <Trash className="mr-2 h-4 w-4" />
+                      <Trash className="ml-2 h-4 w-4" />
                       حذف
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                <div className="flex-1 text-right">
+                  <CardTitle>{note.title}</CardTitle>
+                  <CardDescription>{note.date}</CardDescription>
+                </div>
               </div>
-              <CardDescription>{note.date}</CardDescription>
             </CardHeader>
-            <CardContent className="text-sm">
+            <CardContent className="text-right text-sm">
               {note.images && note.images.length > 0 && (
                 <div className="mb-3 relative">
                   {note.images.length === 1 ? (
@@ -456,7 +458,7 @@ export default function NotesPage() {
                       ))}
                       {note.images.length > 3 && (
                         <div
-                          className="absolute bottom-0 right-0 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded-bl-md cursor-pointer"
+                          className="absolute bottom-0 left-0 cursor-pointer rounded-br-md bg-black bg-opacity-70 px-2 py-1 text-xs text-white"
                           onClick={() => openImagePreview(note.images, 0)}
                         >
                           +{note.images.length - 3}
@@ -473,13 +475,13 @@ export default function NotesPage() {
       </div>
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[425px]" dir="rtl">
+          <DialogHeader className="text-right">
             <DialogTitle>تعديل الملاحظة</DialogTitle>
             <DialogDescription>قم بتعديل معلومات الملاحظة هنا. اضغط على حفظ عند الانتهاء.</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
+          <div className="grid gap-4 py-4 text-right">
+            <div className="grid gap-2 text-right">
               <Label htmlFor="edit-title">العنوان</Label>
               <Input
                 id="edit-title"
@@ -487,7 +489,7 @@ export default function NotesPage() {
                 onChange={(e) => editingNote && setEditingNote({ ...editingNote, title: e.target.value })}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid gap-2 text-right">
               <Label htmlFor="edit-content">المحتوى</Label>
               <Textarea
                 id="edit-content"
@@ -496,7 +498,7 @@ export default function NotesPage() {
                 onChange={(e) => editingNote && setEditingNote({ ...editingNote, content: e.target.value })}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid gap-2 text-right">
               <Label htmlFor="edit-image">الصور (اختياري)</Label>
               <div className="flex items-center gap-2">
                 <Button
@@ -505,7 +507,7 @@ export default function NotesPage() {
                   onClick={() => document.getElementById("edit-image-upload")?.click()}
                   className="w-full"
                 >
-                  <ImageIcon className="mr-2 h-4 w-4" />
+                  <ImageIcon className="ml-2 h-4 w-4" />
                   إضافة صور
                 </Button>
                 <input
@@ -533,7 +535,7 @@ export default function NotesPage() {
                           type="button"
                           variant="destructive"
                           size="icon"
-                          className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="absolute left-1 top-1 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
                           onClick={(e) => {
                             e.stopPropagation()
                             removeImage(index, true)
@@ -548,7 +550,7 @@ export default function NotesPage() {
               )}
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-row-reverse">
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
               إلغاء
             </Button>

@@ -2,6 +2,7 @@ import type { DashboardContent, DashboardPrincipalMessage } from "@/lib/dashboar
 import type { ManagedStudent } from "@/lib/student-roster"
 import type {
   AttendanceRecord,
+  ClassScheduleMap,
   DaySchedule,
   GradeStudent,
   PeriodSlot,
@@ -58,15 +59,27 @@ export async function saveAttendanceRecords(attendanceRecords: AttendanceRecord[
 }
 
 export async function fetchScheduleData() {
-  return requestJson<{ scheduleData: DaySchedule[]; periodSlots: PeriodSlot[] }>("/api/school/schedule", {
+  return requestJson<{
+    scheduleData: DaySchedule[]
+    classSchedules: ClassScheduleMap
+    periodSlots: PeriodSlot[]
+    classNames: string[]
+    teacherOptions: Array<{ id: string; name: string }>
+  }>("/api/school/schedule", {
     method: "GET",
   })
 }
 
-export async function saveScheduleData(scheduleData: DaySchedule[], periodSlots: PeriodSlot[]) {
-  return requestJson<{ scheduleData: DaySchedule[]; periodSlots: PeriodSlot[] }>("/api/school/schedule", {
+export async function saveScheduleData(classSchedules: ClassScheduleMap, periodSlots: PeriodSlot[]) {
+  return requestJson<{
+    scheduleData: DaySchedule[]
+    classSchedules: ClassScheduleMap
+    periodSlots: PeriodSlot[]
+    classNames: string[]
+    teacherOptions: Array<{ id: string; name: string }>
+  }>("/api/school/schedule", {
     method: "PUT",
-    body: JSON.stringify({ scheduleData, periodSlots }),
+    body: JSON.stringify({ classSchedules, periodSlots }),
   })
 }
 

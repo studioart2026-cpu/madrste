@@ -37,4 +37,5 @@ export interface AdminManagedUser {
   lastActive: string
   createdAt: string
   phoneNumber?: string
+  isDeletionProtected: boolean
 }

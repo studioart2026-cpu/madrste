@@ -18,7 +18,6 @@ import {
   behaviorEntries,
   interventionPlans,
   parentMessages,
-  unifiedStudentRecord,
 } from "@/lib/school-insights"
 import { fetchStudentProfilesData, saveStudentProfilesData } from "@/lib/school-api"
 import type { StudentProfileRecord } from "@/lib/school-data"
@@ -32,40 +31,35 @@ interface StudentDirectoryItem {
   classroom: string
 }
 
-const studentEmailToName: Record<string, string> = {
-  "student@example.com": "سارة أحمد",
-  "student2@example.com": "نورة محمد",
-}
-
 const normalizeText = (value: string) => value.replace(/\s+/g, " ").trim()
+
+const buildEmptyProfile = (name = "", className = ""): StudentProfileRecord => ({
+  id: "",
+  name,
+  className,
+  guardian: "",
+  attendanceRate: 0,
+  averageGrade: 0,
+  behaviorScore: 0,
+  riskLevel: "منخفض",
+  strengths: [],
+  supportNeeds: [],
+})
 
 export default function StudentProfilePage() {
   const { userType, userName, email } = useAuth()
   const { toast } = useToast()
   const isStudent = userType === "student"
   const canEdit = userType === "admin"
-  const currentStudentName = normalizeText((email && studentEmailToName[email]) || userName || unifiedStudentRecord.name)
+  const currentStudentName = normalizeText(userName || email || "")
 
   const [studentDirectory, setStudentDirectory] = useState<StudentDirectoryItem[]>([])
   const [profiles, setProfiles] = useState<Record<string, StudentProfileRecord>>({})
   const [selectedStudentName, setSelectedStudentName] = useState(currentStudentName)
-  const [draftProfile, setDraftProfile] = useState<StudentProfileRecord>({
-    id: "seed-student",
-    ...unifiedStudentRecord,
-  })
+  const [draftProfile, setDraftProfile] = useState<StudentProfileRecord>(buildEmptyProfile())
   const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
-    const fallbackDirectory: StudentDirectoryItem[] = [
-      { id: "1", name: unifiedStudentRecord.name, classroom: unifiedStudentRecord.className },
-    ]
-    const fallbackProfiles: Record<string, StudentProfileRecord> = {
-      [normalizeText(unifiedStudentRecord.name)]: {
-        id: "1",
-        ...unifiedStudentRecord,
-      },
-    }
-
     let isMounted = true
 
     const loadProfiles = async () => {
@@ -77,8 +71,8 @@ export default function StudentProfilePage() {
 
         const mappedDirectory = response.students.map((student, index) => ({
           id: student.id || `student-${index + 1}`,
-          name: student.name || unifiedStudentRecord.name,
-          classroom: student.classroom || unifiedStudentRecord.className,
+          name: student.name || "",
+          classroom: student.classroom || "",
         }))
 
         const mappedProfiles = Object.fromEntries(
@@ -88,15 +82,15 @@ export default function StudentProfilePage() {
           ]),
         ) as Record<string, StudentProfileRecord>
 
-        setStudentDirectory(mappedDirectory.length > 0 ? mappedDirectory : fallbackDirectory)
-        setProfiles(Object.keys(mappedProfiles).length > 0 ? mappedProfiles : fallbackProfiles)
+        setStudentDirectory(mappedDirectory.filter((student) => student.name))
+        setProfiles(mappedProfiles)
       } catch {
         if (!isMounted) {
           return
         }
 
-        setProfiles(fallbackProfiles)
-        setStudentDirectory(fallbackDirectory)
+        setProfiles({})
+        setStudentDirectory([])
       }
     }
 
@@ -120,13 +114,8 @@ export default function StudentProfilePage() {
     if (selectedFromStorage) return selectedFromStorage
 
     const selectedFromDirectory = studentDirectory.find((student) => student.name === selectedStudentName)
-    return {
-      id: selectedFromDirectory?.id || "fallback-student",
-      ...unifiedStudentRecord,
-      name: selectedStudentName || unifiedStudentRecord.name,
-      className: selectedFromDirectory?.classroom || unifiedStudentRecord.className,
-    }
-  }, [profiles, selectedStudentName, studentDirectory])
+    return buildEmptyProfile(selectedStudentName || currentStudentName, selectedFromDirectory?.classroom || "")
+  }, [currentStudentName, profiles, selectedStudentName, studentDirectory])
 
   useEffect(() => {
     setDraftProfile(selectedProfile)

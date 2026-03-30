@@ -24,6 +24,19 @@ export default function LoginPage() {
   const { toast } = useToast()
   const { login, isReady } = useAuth()
 
+  const navigateAfterAuth = (destination: string) => {
+    router.replace(destination)
+    router.refresh()
+
+    if (typeof window !== "undefined") {
+      window.setTimeout(() => {
+        if (window.location.pathname !== destination) {
+          window.location.assign(destination)
+        }
+      }, 150)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
@@ -33,13 +46,13 @@ export default function LoginPage() {
       const user = await login(email, password)
 
       if (!user.isApproved) {
-        router.push("/pending-approval")
+        navigateAfterAuth("/pending-approval")
       } else {
         toast({
           title: "تم تسجيل الدخول بنجاح",
           description: "مرحباً بك في نظام إدارة المدرسة",
         })
-        router.push("/dashboard")
+        navigateAfterAuth("/dashboard")
       }
     } catch (error) {
       setError(error instanceof Error ? error.message : "حدث خطأ أثناء تسجيل الدخول. يرجى المحاولة مرة أخرى.")

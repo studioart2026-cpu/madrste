@@ -20,188 +20,33 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Toaster } from "@/components/ui/toaster"
 import { toast } from "@/components/ui/use-toast"
-import { fetchClassesData, saveClassesData } from "@/lib/school-api"
+import { fetchClassesData, fetchTeachersData, saveClassesData } from "@/lib/school-api"
 import { defaultSchoolClasses, type SchoolClass } from "@/lib/school-data"
-import { teacherNames } from "@/lib/teachers-directory"
 
 type Class = SchoolClass
+const UNASSIGNED_TEACHER = "غير مسند"
 
-// بيانات تجريبية للفصول
-const initialClassesData: Class[] = [
-  // الترم الأول
-  {
-    id: "1",
-    name: "١/١",
-    level: "١",
-    section: "١",
-    teacher: "أ. نورة الأحمد",
-    students: 25,
-    rating: 4.5,
-    capacity: 30,
-    term: "الترم الأول",
-  },
-  {
-    id: "2",
-    name: "١/٢",
-    level: "١",
-    section: "٢",
-    teacher: "أ. سارة المحمد",
-    students: 22,
-    rating: 4.2,
-    capacity: 30,
-    term: "الترم الأول",
-  },
-  {
-    id: "6",
-    name: "٢/١",
-    level: "٢",
-    section: "١",
-    teacher: "أ. منى العبدالله",
-    students: 30,
-    rating: 4.1,
-    capacity: 35,
-    term: "الترم الأول",
-  },
-  {
-    id: "7",
-    name: "٢/٢",
-    level: "٢",
-    section: "٢",
-    teacher: "أ. هند السعد",
-    students: 28,
-    rating: 3.9,
-    capacity: 35,
-    term: "الترم الأول",
-  },
-  {
-    id: "12",
-    name: "٣/١",
-    level: "٣",
-    section: "١",
-    teacher: "أ. عبير الخالد",
-    students: 32,
-    rating: 4.6,
-    capacity: 40,
-    term: "الترم الأول",
-  },
+const initialClassesData: Class[] = []
 
-  // الترم الثاني
-  {
-    id: "3",
-    name: "١/٣",
-    level: "١",
-    section: "٣",
-    teacher: "أ. ريم الفهد",
-    students: 28,
-    rating: 3.8,
-    capacity: 30,
-    term: "الترم الثاني",
-  },
-  {
-    id: "4",
-    name: "١/٤",
-    level: "١",
-    section: "٤",
-    teacher: "أ. لمياء السلطان",
-    students: 26,
-    rating: 4.0,
-    capacity: 30,
-    term: "الترم الثاني",
-  },
-  {
-    id: "8",
-    name: "٢/٣",
-    level: "٢",
-    section: "٣",
-    teacher: "أ. أمل الناصر",
-    students: 26,
-    rating: 4.4,
-    capacity: 35,
-    term: "الترم الثاني",
-  },
-  {
-    id: "9",
-    name: "٢/٤",
-    level: "٢",
-    section: "٤",
-    teacher: "أ. نوف العتيبي",
-    students: 27,
-    rating: 4.3,
-    capacity: 35,
-    term: "الترم الثاني",
-  },
-  {
-    id: "13",
-    name: "٣/٢",
-    level: "٣",
-    section: "٢",
-    teacher: "أ. نورة الأحمد",
-    students: 30,
-    rating: 4.2,
-    capacity: 40,
-    term: "الترم الثاني",
-  },
+const buildTeacherOptions = (teachers: Array<{ name?: string }> = [], classes: Class[] = []) => {
+  const options = new Set<string>([UNASSIGNED_TEACHER])
 
-  // فصول إضافية (الترم الثاني)
-  {
-    id: "5",
-    name: "١/٥",
-    level: "١",
-    section: "٥",
-    teacher: "أ. سارة المحمد",
-    students: 24,
-    rating: 4.7,
-    capacity: 30,
-    term: "الترم الثاني",
-  },
-  {
-    id: "10",
-    name: "٢/٥",
-    level: "٢",
-    section: "٥",
-    teacher: "أ. منى العبدالله",
-    students: 29,
-    rating: 4.5,
-    capacity: 35,
-    term: "الترم الثاني",
-  },
-  {
-    id: "11",
-    name: "٢/٦",
-    level: "٢",
-    section: "٦",
-    teacher: "أ. هند السعد",
-    students: 31,
-    rating: 4.2,
-    capacity: 35,
-    term: "الترم الثاني",
-  },
-  {
-    id: "14",
-    name: "٣/٣",
-    level: "٣",
-    section: "٣",
-    teacher: "أ. عبير الخالد",
-    students: 28,
-    rating: 4.8,
-    capacity: 40,
-    term: "الترم الثاني",
-  },
-  {
-    id: "15",
-    name: "٣/٤",
-    level: "٣",
-    section: "٤",
-    teacher: "أ. ريم الفهد",
-    students: 34,
-    rating: 4.4,
-    capacity: 40,
-    term: "الترم الثاني",
-  },
-]
+  teachers.forEach((teacher) => {
+    const normalizedName = String(teacher.name || "").trim()
+    if (normalizedName) {
+      options.add(`أ. ${normalizedName}`)
+    }
+  })
 
-// قائمة المعلمات المعتمدة
-const teachersList = teacherNames
+  classes.forEach((schoolClass) => {
+    const normalizedTeacher = String(schoolClass.teacher || "").trim()
+    if (normalizedTeacher) {
+      options.add(normalizedTeacher)
+    }
+  })
+
+  return Array.from(options)
+}
 
 export default function ClassesPage() {
   // حالة الفصول
@@ -210,6 +55,7 @@ export default function ClassesPage() {
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [activeTab, setActiveTab] = useState<string>("term1")
   const [isSaving, setIsSaving] = useState(false)
+  const [teacherOptions, setTeacherOptions] = useState<string[]>(buildTeacherOptions([], defaultSchoolClasses))
 
   // حالات مربعات الحوار
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
@@ -224,7 +70,7 @@ export default function ClassesPage() {
   const [newClassData, setNewClassData] = useState({
     level: "١" as "١" | "٢" | "٣",
     section: "",
-    teacher: teachersList[0],
+    teacher: UNASSIGNED_TEACHER,
     capacity: 30,
     term: "الترم الأول" as "الترم الأول" | "الترم الثاني",
   })
@@ -234,16 +80,32 @@ export default function ClassesPage() {
 
     const loadClasses = async () => {
       try {
-        const response = await fetchClassesData()
+        const [classesResponse, teachersResponse] = await Promise.all([fetchClassesData(), fetchTeachersData()])
         if (!isMounted) {
           return
         }
-        setClasses(Array.isArray(response.classes) && response.classes.length > 0 ? response.classes : defaultSchoolClasses)
+
+        const nextClasses =
+          Array.isArray(classesResponse.classes) && classesResponse.classes.length > 0
+            ? classesResponse.classes
+            : defaultSchoolClasses
+        const nextTeacherOptions = buildTeacherOptions(
+          Array.isArray(teachersResponse.teachers) ? teachersResponse.teachers : [],
+          nextClasses,
+        )
+
+        setClasses(nextClasses)
+        setTeacherOptions(nextTeacherOptions)
+        setNewClassData((current) => ({
+          ...current,
+          teacher: nextTeacherOptions.includes(current.teacher) ? current.teacher : nextTeacherOptions[0] || UNASSIGNED_TEACHER,
+        }))
       } catch {
         if (!isMounted) {
           return
         }
         setClasses(defaultSchoolClasses)
+        setTeacherOptions(buildTeacherOptions([], defaultSchoolClasses))
       }
     }
 
@@ -312,7 +174,7 @@ export default function ClassesPage() {
       name: "١/٩٩",
       level: "١",
       section: "٩٩",
-      teacher: teachersList[0],
+      teacher: teacherOptions[0] || UNASSIGNED_TEACHER,
       students: 0,
       rating: 0,
       capacity: 30,
@@ -390,7 +252,7 @@ export default function ClassesPage() {
     setNewClassData({
       level: "١",
       section: "",
-      teacher: teachersList[0],
+      teacher: teacherOptions[0] || UNASSIGNED_TEACHER,
       capacity: 30,
       term: "الترم الأول",
     })
@@ -449,7 +311,10 @@ export default function ClassesPage() {
               variant="ghost"
               size="icon"
               onClick={() => {
-                setClassToEdit(cls)
+                setClassToEdit({
+                  ...cls,
+                  teacher: teacherOptions.includes(cls.teacher) ? cls.teacher : teacherOptions[0] || UNASSIGNED_TEACHER,
+                })
                 setIsEditDialogOpen(true)
               }}
             >
@@ -628,7 +493,7 @@ export default function ClassesPage() {
               <SelectValue placeholder="اختر المعلم" />
             </SelectTrigger>
             <SelectContent>
-              {teachersList.map((teacher) => (
+              {teacherOptions.map((teacher) => (
                 <SelectItem key={teacher} value={teacher}>
                   {teacher}
                 </SelectItem>
@@ -721,7 +586,7 @@ export default function ClassesPage() {
                       <SelectValue placeholder="اختر المعلم" />
                     </SelectTrigger>
                     <SelectContent>
-                      {teachersList.map((teacher) => (
+                      {teacherOptions.map((teacher) => (
                         <SelectItem key={teacher} value={teacher}>
                           {teacher}
                         </SelectItem>
@@ -750,7 +615,7 @@ export default function ClassesPage() {
                     setNewClassData({
                       level: "١",
                       section: "",
-                      teacher: teachersList[0],
+                      teacher: teacherOptions[0] || UNASSIGNED_TEACHER,
                       capacity: 30,
                       term: "الترم الأول",
                     })
@@ -895,7 +760,7 @@ export default function ClassesPage() {
                     <SelectValue placeholder="اختر المعلم" />
                   </SelectTrigger>
                   <SelectContent>
-                    {teachersList.map((teacher) => (
+                    {teacherOptions.map((teacher) => (
                       <SelectItem key={teacher} value={teacher}>
                         {teacher}
                       </SelectItem>

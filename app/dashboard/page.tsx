@@ -7,18 +7,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   BellRing,
-  CalendarIcon,
   CheckCircle2,
-  Clock,
-  FileArchive,
-  GraduationCap,
-  MessageSquareMore,
   Save,
-  School,
-  ShieldAlert,
   SquarePen,
   Target,
-  Users,
   X,
 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -28,7 +20,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { defaultDashboardContent, type DashboardContent } from "@/lib/dashboard-data"
-import { fetchDashboardData, saveDashboardData, saveDashboardPrincipalMessage } from "@/lib/school-api"
+import { fetchDashboardData, saveDashboardPrincipalMessage } from "@/lib/school-api"
 import {
   appointments,
   archivedDocuments,
@@ -62,7 +54,6 @@ export default function DashboardPage() {
   const [draftPrincipalMessageTitle, setDraftPrincipalMessageTitle] = useState(defaultDashboardContent.principalMessage.title)
   const [draftPrincipalMessageBody, setDraftPrincipalMessageBody] = useState(defaultDashboardContent.principalMessage.body)
   const [isEditingPrincipalMessage, setIsEditingPrincipalMessage] = useState(false)
-  const canEditDashboardData = userType === "admin"
   const [executiveMetricsState, setExecutiveMetricsState] = useState(executiveMetrics)
   const [smartAlertsState, setSmartAlertsState] = useState(smartAlerts)
   const [interventionPlansState, setInterventionPlansState] = useState(interventionPlans)
@@ -74,25 +65,8 @@ export default function DashboardPage() {
   const [internalTasksState, setInternalTasksState] = useState(internalTasks)
   const [monthlyAnalyticsState, setMonthlyAnalyticsState] = useState(monthlyAnalytics)
   const [teacherPerformanceState, setTeacherPerformanceState] = useState(teacherPerformance)
-  const [editorValues, setEditorValues] = useState<Record<string, string>>({})
-  const [editingSection, setEditingSection] = useState<string | null>(null)
-  const [editorError, setEditorError] = useState<string | null>(null)
   const [isSavingDashboard, setIsSavingDashboard] = useState(false)
   const previousAlertsSnapshotRef = useRef<string>("")
-
-  const storageKeys = {
-    executiveMetrics: "executiveMetrics",
-    smartAlerts: "smartAlerts",
-    interventionPlans: "interventionPlans",
-    unifiedStudentRecord: "unifiedStudentRecord",
-    behaviorEntries: "behaviorEntries",
-    archivedDocuments: "archivedDocuments",
-    parentMessages: "parentMessages",
-    appointments: "appointments",
-    internalTasks: "internalTasks",
-    monthlyAnalytics: "monthlyAnalytics",
-    teacherPerformance: "teacherPerformance",
-  } as const
 
   const applyDashboardData = (dashboard: DashboardContent) => {
     setPrincipalMessageTitle(dashboard.principalMessage.title)
@@ -111,24 +85,6 @@ export default function DashboardPage() {
     setMonthlyAnalyticsState(dashboard.monthlyAnalytics)
     setTeacherPerformanceState(dashboard.teacherPerformance)
   }
-
-  const buildDashboardPayload = (overrides?: Partial<DashboardContent>): DashboardContent => ({
-    principalMessage: overrides?.principalMessage || {
-      title: principalMessageTitle,
-      body: principalMessageBody,
-    },
-    executiveMetrics: overrides?.executiveMetrics || executiveMetricsState,
-    smartAlerts: overrides?.smartAlerts || smartAlertsState,
-    interventionPlans: overrides?.interventionPlans || interventionPlansState,
-    unifiedStudentRecord: overrides?.unifiedStudentRecord || unifiedStudentRecordState,
-    behaviorEntries: overrides?.behaviorEntries || behaviorEntriesState,
-    archivedDocuments: overrides?.archivedDocuments || archivedDocumentsState,
-    parentMessages: overrides?.parentMessages || parentMessagesState,
-    appointments: overrides?.appointments || appointmentsState,
-    internalTasks: overrides?.internalTasks || internalTasksState,
-    monthlyAnalytics: overrides?.monthlyAnalytics || monthlyAnalyticsState,
-    teacherPerformance: overrides?.teacherPerformance || teacherPerformanceState,
-  })
 
   useEffect(() => {
     let isMounted = true
@@ -246,97 +202,8 @@ export default function DashboardPage() {
     previousAlertsSnapshotRef.current = nextSnapshot
   }, [smartAlertsState, visibleAlerts.length])
 
-  const startEditingSection = (section: keyof typeof storageKeys, value: unknown) => {
-    setEditingSection(section)
-    setEditorError(null)
-    setEditorValues((current) => ({
-      ...current,
-      [section]: JSON.stringify(value, null, 2),
-    }))
-  }
-
-  const cancelEditingSection = () => {
-    setEditingSection(null)
-    setEditorError(null)
-  }
-
-  const saveEditedSection = async <T,>(
-    section: keyof typeof storageKeys,
-    _setter: (value: T) => void,
-    _storageKey: string,
-  ) => {
-    const raw = editorValues[section]
-    if (!raw) return
-
-    try {
-      const parsed = JSON.parse(raw) as T
-      setIsSavingDashboard(true)
-      const response = await saveDashboardData(
-        buildDashboardPayload({
-          [section]: parsed,
-        } as Partial<DashboardContent>),
-      )
-      applyDashboardData(response.dashboard)
-      setEditingSection(null)
-      setEditorError(null)
-      notifyDashboardUpdate()
-      toast({
-        title: "تم حفظ التعديلات",
-        description: "تم تحديث بيانات لوحة التحكم بنجاح",
-      })
-    } catch (error) {
-      if (error instanceof SyntaxError) {
-        setEditorError("تنسيق JSON غير صالح. تأكد من الأقواس والفواصل والنصوص.")
-      } else {
-        setEditorError(null)
-        toast({
-          title: "تعذر حفظ التعديلات",
-          description: error instanceof Error ? error.message : "حدث خطأ أثناء حفظ بيانات لوحة التحكم",
-          variant: "destructive",
-        })
-      }
-    } finally {
-      setIsSavingDashboard(false)
-    }
-  }
-
-  const resetEditedSection = async <T,>(
-    section: keyof typeof storageKeys,
-    fallback: T,
-    _setter: (value: T) => void,
-    _storageKey: string,
-  ) => {
-    setIsSavingDashboard(true)
-
-    try {
-      const response = await saveDashboardData(
-        buildDashboardPayload({
-          [section]: fallback,
-        } as Partial<DashboardContent>),
-      )
-      applyDashboardData(response.dashboard)
-      setEditorValues((current) => ({
-        ...current,
-        [section]: JSON.stringify(fallback, null, 2),
-      }))
-      setEditorError(null)
-      notifyDashboardUpdate()
-      toast({
-        title: "تمت استعادة البيانات",
-        description: "تمت إعادة القسم إلى القيم الافتراضية",
-      })
-    } catch (error) {
-      toast({
-        title: "تعذر استعادة البيانات",
-        description: error instanceof Error ? error.message : "حدث خطأ أثناء استعادة البيانات الافتراضية",
-        variant: "destructive",
-      })
-    } finally {
-      setIsSavingDashboard(false)
-    }
-  }
-
   const quickAlerts = visibleAlerts.slice(0, 3)
+  const visibleExecutiveMetrics = executiveMetricsState.filter((metric) => !["risk", "plans"].includes(metric.id))
 
   return (
     <div className="space-y-6">
@@ -415,8 +282,8 @@ export default function DashboardPage() {
 
       {isAdmin && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {executiveMetricsState.map((metric) => (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4" dir="rtl">
+            {visibleExecutiveMetrics.map((metric) => (
               <Card key={metric.id}>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">{metric.title}</CardTitle>
@@ -430,514 +297,93 @@ export default function DashboardPage() {
           </div>
 
           <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-5">
-          <TabsTrigger value="overview">المؤشرات</TabsTrigger>
-          <TabsTrigger value="record">الملف الموحد</TabsTrigger>
-          <TabsTrigger value="operations">التشغيل</TabsTrigger>
-          <TabsTrigger value="analytics">التحليلات</TabsTrigger>
-          {canEditDashboardData && <TabsTrigger value="editor">التحرير</TabsTrigger>}
-        </TabsList>
+            <TabsList className="grid w-full grid-cols-2 md:ml-auto md:w-[420px]" dir="rtl">
+              <TabsTrigger value="overview">المؤشرات</TabsTrigger>
+              <TabsTrigger value="analytics">التحليلات</TabsTrigger>
+            </TabsList>
 
-        <TabsContent value="overview" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            {executiveMetricsState.map((metric) => (
-              <Card key={metric.id}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">{metric.title}</CardTitle>
-                  <CardDescription>{metric.note}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-primary">{metric.value}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BellRing className="h-5 w-5 text-primary" />
-                  التنبيهات الذكية
-                </CardTitle>
-                <CardDescription>تنبيهات تلقائية حسب الدور والمخاطر الحالية</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {visibleAlerts.map((alert) => (
-                  <div key={alert.id} className="rounded-lg border p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-medium">{alert.title}</p>
-                      <span className="text-xs text-primary">{alert.severity}</span>
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">{alert.description}</p>
-                  </div>
+            <TabsContent value="overview" className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4" dir="rtl">
+                {visibleExecutiveMetrics.map((metric) => (
+                  <Card key={metric.id}>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base">{metric.title}</CardTitle>
+                      <CardDescription>{metric.note}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-3xl font-bold text-primary">{metric.value}</p>
+                    </CardContent>
+                  </Card>
                 ))}
-              </CardContent>
-            </Card>
+              </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Target className="h-5 w-5 text-primary" />
-                  الخطط العلاجية والإثرائية
-                </CardTitle>
-                <CardDescription>خطة متابعة قابلة للتنفيذ مع مسؤول واضح وموعد إغلاق</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {urgentPlans.map((plan) => (
-                  <div key={plan.id} className="rounded-lg border p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-medium">
-                        {plan.studentName} - {plan.subject}
-                      </p>
-                      <span className="text-xs text-primary">{plan.status}</span>
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      المسؤولة: {plan.owner} | الاستحقاق: {plan.dueDate}
-                    </p>
-                    <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-                      {plan.actions.map((action) => (
-                        <li key={action}>• {action}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
+              <div className="grid grid-cols-1 gap-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BellRing className="h-5 w-5 text-primary" />
+                      التنبيهات الذكية
+                    </CardTitle>
+                    <CardDescription>تنبيهات تلقائية حسب الدور والمخاطر الحالية</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {visibleAlerts.map((alert) => (
+                      <div key={alert.id} className="rounded-lg border p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="font-medium">{alert.title}</p>
+                          <span className="text-xs text-primary">{alert.severity}</span>
+                        </div>
+                        <p className="mt-1 text-sm text-muted-foreground">{alert.description}</p>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
 
-        <TabsContent value="record" className="space-y-4">
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-            <Card className="xl:col-span-2">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <School className="h-5 w-5 text-primary" />
-                  الملف الموحد للطالبة
-                </CardTitle>
-                <CardDescription>عرض موحد للدرجات والحضور والسلوك والخطط والمرفقات</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="rounded-lg border p-3">
-                    <p className="text-sm text-muted-foreground">الطالبة</p>
-                    <p className="font-semibold">{dashboardStudentRecord.name}</p>
-                  </div>
-                  <div className="rounded-lg border p-3">
-                    <p className="text-sm text-muted-foreground">الفصل</p>
-                    <p className="font-semibold">{dashboardStudentRecord.className}</p>
-                  </div>
-                  <div className="rounded-lg border p-3">
-                    <p className="text-sm text-muted-foreground">نسبة الحضور</p>
-                    <p className="font-semibold">{dashboardStudentRecord.attendanceRate}%</p>
-                  </div>
-                  <div className="rounded-lg border p-3">
-                    <p className="text-sm text-muted-foreground">متوسط الدرجات</p>
-                    <p className="font-semibold">{dashboardStudentRecord.averageGrade}%</p>
-                  </div>
-                  <div className="rounded-lg border p-3">
-                    <p className="text-sm text-muted-foreground">درجة السلوك</p>
-                    <p className="font-semibold">{dashboardStudentRecord.behaviorScore}%</p>
-                  </div>
-                  <div className="rounded-lg border p-3">
-                    <p className="text-sm text-muted-foreground">مستوى الخطورة</p>
-                    <p className="font-semibold">{dashboardStudentRecord.riskLevel}</p>
-                  </div>
-                </div>
+            <TabsContent value="analytics" className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2" dir="rtl">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>تحليلات شهرية</CardTitle>
+                    <CardDescription>المواد الأكثر انخفاضًا والتحسن بين الفترات</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {monthlyAnalyticsState.map((item) => (
+                      <div key={item.label} className="rounded-lg border p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="font-medium">{item.label}</p>
+                          <span className="text-sm text-primary">تحسن {item.improvedStudents} طالبات</span>
+                        </div>
+                        <p className="mt-1 text-sm text-muted-foreground">حالات انخفاض الأداء: {item.lowPerformance}</p>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="rounded-lg border p-3">
-                    <p className="mb-2 font-medium">نقاط القوة</p>
-                    <ul className="space-y-1 text-sm text-muted-foreground">
-                      {dashboardStudentRecord.strengths.map((item) => (
-                        <li key={item}>• {item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div className="rounded-lg border p-3">
-                    <p className="mb-2 font-medium">احتياجات الدعم</p>
-                    <ul className="space-y-1 text-sm text-muted-foreground">
-                      {dashboardStudentRecord.supportNeeds.map((item) => (
-                        <li key={item}>• {item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ShieldAlert className="h-5 w-5 text-primary" />
-                  السلوك والانضباط
-                </CardTitle>
-                <CardDescription>توثيق السلوك الإيجابي والملاحظات والاستدعاءات</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {behaviorEntriesState.map((entry) => (
-                  <div key={entry.id} className="rounded-lg border p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-medium">{entry.studentName}</p>
-                      <span className="text-xs text-primary">{entry.type}</span>
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">{entry.note}</p>
-                    <p className="mt-2 text-xs text-muted-foreground">{entry.date}</p>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileArchive className="h-5 w-5 text-primary" />
-                أرشفة المستندات
-              </CardTitle>
-              <CardDescription>أعذار الغياب، النماذج، والمرفقات الأكاديمية والصحية</CardDescription>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {archivedDocumentsState.map((document) => (
-                <div key={document.id} className="rounded-lg border p-3">
-                  <p className="font-medium">{document.title}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{document.studentName}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{document.category}</p>
-                  <p className="mt-2 text-xs text-muted-foreground">آخر تحديث: {document.updatedAt}</p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="operations" className="space-y-4">
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MessageSquareMore className="h-5 w-5 text-primary" />
-                  التواصل مع أولياء الأمور
-                </CardTitle>
-                <CardDescription>سجل الرسائل، حالات الرد، وآخر تحديث</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {parentMessagesState.map((message) => (
-                  <div key={message.id} className="rounded-lg border p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-medium">
-                        {message.parentName} - {message.studentName}
-                      </p>
-                      <span className="text-xs text-primary">{message.status}</span>
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">{message.subject}</p>
-                    <p className="mt-2 text-xs text-muted-foreground">{message.lastUpdate}</p>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CalendarIcon className="h-5 w-5 text-primary" />
-                  المواعيد والمقابلات
-                </CardTitle>
-                <CardDescription>جدولة المواعيد بين المدرسة، المعلمات، وأولياء الأمور</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {appointmentsState.map((appointment) => (
-                  <div key={appointment.id} className="rounded-lg border p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-medium">{appointment.title}</p>
-                      <span className="text-xs text-primary">{appointment.status}</span>
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">{appointment.owner}</p>
-                    <p className="mt-2 text-xs text-muted-foreground">{appointment.date}</p>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-primary" />
-                لوحة المهام الداخلية
-              </CardTitle>
-              <CardDescription>مهام تشغيلية حسب الأولوية وحالة التنفيذ</CardDescription>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {highPriorityTasks.map((task) => (
-                <div key={task.id} className="rounded-lg border p-3">
-                  <p className="font-medium">{task.title}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">المسؤول: {task.owner}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">الاستحقاق: {task.dueDate}</p>
-                  <div className="mt-2 flex items-center justify-between text-xs">
-                    <span className="text-primary">{task.priority}</span>
-                    <span className="text-muted-foreground">{task.status}</span>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="analytics" className="space-y-4">
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>تحليلات شهرية</CardTitle>
-                <CardDescription>المواد الأكثر انخفاضًا والتحسن بين الفترات</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {monthlyAnalyticsState.map((item) => (
-                  <div key={item.label} className="rounded-lg border p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-medium">{item.label}</p>
-                      <span className="text-sm text-primary">تحسن {item.improvedStudents} طالبات</span>
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">حالات انخفاض الأداء: {item.lowPerformance}</p>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>مؤشرات أداء المعلمات</CardTitle>
-                <CardDescription>الالتزام، استكمال الرصد، وسرعة الاستجابة</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {teacherPerformanceState.map((teacher) => (
-                  <div key={teacher.id} className="rounded-lg border p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-medium">{teacher.name}</p>
-                      <span className="text-sm text-primary">{teacher.weeklyLoad}</span>
-                    </div>
-                    <div className="mt-2 grid grid-cols-3 gap-2 text-sm text-muted-foreground">
-                      <span>الحضور: {teacher.attendance}%</span>
-                      <span>الرصد: {teacher.gradeCompletion}%</span>
-                      <span>الاستجابة: {teacher.responseTime}</span>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        {canEditDashboardData && (
-          <TabsContent value="editor" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>تحرير بيانات اللوحة</CardTitle>
-                <CardDescription>يمكنك تعديل جميع الأقسام الجديدة وحفظها مباشرة. التنسيق المستخدم هو JSON.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <EditableJsonSection
-                  title="المؤشرات التنفيذية"
-                  sectionKey="executiveMetrics"
-                  value={executiveMetricsState}
-                  editingSection={editingSection}
-                  editorValue={editorValues.executiveMetrics || ""}
-                  onStartEdit={() => startEditingSection("executiveMetrics", executiveMetricsState)}
-                  onChange={(value) => setEditorValues((current) => ({ ...current, executiveMetrics: value }))}
-                  onSave={() =>
-                    saveEditedSection("executiveMetrics", setExecutiveMetricsState, storageKeys.executiveMetrics)
-                  }
-                  onCancel={cancelEditingSection}
-                  onReset={() =>
-                    resetEditedSection("executiveMetrics", executiveMetrics, setExecutiveMetricsState, storageKeys.executiveMetrics)
-                  }
-                  error={editorError}
-                />
-                <EditableJsonSection
-                  title="التنبيهات الذكية"
-                  sectionKey="smartAlerts"
-                  value={smartAlertsState}
-                  editingSection={editingSection}
-                  editorValue={editorValues.smartAlerts || ""}
-                  onStartEdit={() => startEditingSection("smartAlerts", smartAlertsState)}
-                  onChange={(value) => setEditorValues((current) => ({ ...current, smartAlerts: value }))}
-                  onSave={() => saveEditedSection("smartAlerts", setSmartAlertsState, storageKeys.smartAlerts)}
-                  onCancel={cancelEditingSection}
-                  onReset={() => resetEditedSection("smartAlerts", smartAlerts, setSmartAlertsState, storageKeys.smartAlerts)}
-                  error={editorError}
-                />
-                <EditableJsonSection
-                  title="الملف الموحد للطالبة"
-                  sectionKey="unifiedStudentRecord"
-                  value={unifiedStudentRecordState}
-                  editingSection={editingSection}
-                  editorValue={editorValues.unifiedStudentRecord || ""}
-                  onStartEdit={() => startEditingSection("unifiedStudentRecord", unifiedStudentRecordState)}
-                  onChange={(value) => setEditorValues((current) => ({ ...current, unifiedStudentRecord: value }))}
-                  onSave={() =>
-                    saveEditedSection("unifiedStudentRecord", setUnifiedStudentRecordState, storageKeys.unifiedStudentRecord)
-                  }
-                  onCancel={cancelEditingSection}
-                  onReset={() =>
-                    resetEditedSection(
-                      "unifiedStudentRecord",
-                      unifiedStudentRecord,
-                      setUnifiedStudentRecordState,
-                      storageKeys.unifiedStudentRecord,
-                    )
-                  }
-                  error={editorError}
-                />
-                <EditableJsonSection
-                  title="الخطط العلاجية"
-                  sectionKey="interventionPlans"
-                  value={interventionPlansState}
-                  editingSection={editingSection}
-                  editorValue={editorValues.interventionPlans || ""}
-                  onStartEdit={() => startEditingSection("interventionPlans", interventionPlansState)}
-                  onChange={(value) => setEditorValues((current) => ({ ...current, interventionPlans: value }))}
-                  onSave={() =>
-                    saveEditedSection("interventionPlans", setInterventionPlansState, storageKeys.interventionPlans)
-                  }
-                  onCancel={cancelEditingSection}
-                  onReset={() =>
-                    resetEditedSection(
-                      "interventionPlans",
-                      interventionPlans,
-                      setInterventionPlansState,
-                      storageKeys.interventionPlans,
-                    )
-                  }
-                  error={editorError}
-                />
-                <EditableJsonSection
-                  title="السلوك والانضباط"
-                  sectionKey="behaviorEntries"
-                  value={behaviorEntriesState}
-                  editingSection={editingSection}
-                  editorValue={editorValues.behaviorEntries || ""}
-                  onStartEdit={() => startEditingSection("behaviorEntries", behaviorEntriesState)}
-                  onChange={(value) => setEditorValues((current) => ({ ...current, behaviorEntries: value }))}
-                  onSave={() =>
-                    saveEditedSection("behaviorEntries", setBehaviorEntriesState, storageKeys.behaviorEntries)
-                  }
-                  onCancel={cancelEditingSection}
-                  onReset={() =>
-                    resetEditedSection("behaviorEntries", behaviorEntries, setBehaviorEntriesState, storageKeys.behaviorEntries)
-                  }
-                  error={editorError}
-                />
-                <EditableJsonSection
-                  title="أرشيف المستندات"
-                  sectionKey="archivedDocuments"
-                  value={archivedDocumentsState}
-                  editingSection={editingSection}
-                  editorValue={editorValues.archivedDocuments || ""}
-                  onStartEdit={() => startEditingSection("archivedDocuments", archivedDocumentsState)}
-                  onChange={(value) => setEditorValues((current) => ({ ...current, archivedDocuments: value }))}
-                  onSave={() =>
-                    saveEditedSection("archivedDocuments", setArchivedDocumentsState, storageKeys.archivedDocuments)
-                  }
-                  onCancel={cancelEditingSection}
-                  onReset={() =>
-                    resetEditedSection(
-                      "archivedDocuments",
-                      archivedDocuments,
-                      setArchivedDocumentsState,
-                      storageKeys.archivedDocuments,
-                    )
-                  }
-                  error={editorError}
-                />
-                <EditableJsonSection
-                  title="رسائل أولياء الأمور"
-                  sectionKey="parentMessages"
-                  value={parentMessagesState}
-                  editingSection={editingSection}
-                  editorValue={editorValues.parentMessages || ""}
-                  onStartEdit={() => startEditingSection("parentMessages", parentMessagesState)}
-                  onChange={(value) => setEditorValues((current) => ({ ...current, parentMessages: value }))}
-                  onSave={() =>
-                    saveEditedSection("parentMessages", setParentMessagesState, storageKeys.parentMessages)
-                  }
-                  onCancel={cancelEditingSection}
-                  onReset={() =>
-                    resetEditedSection("parentMessages", parentMessages, setParentMessagesState, storageKeys.parentMessages)
-                  }
-                  error={editorError}
-                />
-                <EditableJsonSection
-                  title="المواعيد والمقابلات"
-                  sectionKey="appointments"
-                  value={appointmentsState}
-                  editingSection={editingSection}
-                  editorValue={editorValues.appointments || ""}
-                  onStartEdit={() => startEditingSection("appointments", appointmentsState)}
-                  onChange={(value) => setEditorValues((current) => ({ ...current, appointments: value }))}
-                  onSave={() => saveEditedSection("appointments", setAppointmentsState, storageKeys.appointments)}
-                  onCancel={cancelEditingSection}
-                  onReset={() =>
-                    resetEditedSection("appointments", appointments, setAppointmentsState, storageKeys.appointments)
-                  }
-                  error={editorError}
-                />
-                <EditableJsonSection
-                  title="المهام الداخلية"
-                  sectionKey="internalTasks"
-                  value={internalTasksState}
-                  editingSection={editingSection}
-                  editorValue={editorValues.internalTasks || ""}
-                  onStartEdit={() => startEditingSection("internalTasks", internalTasksState)}
-                  onChange={(value) => setEditorValues((current) => ({ ...current, internalTasks: value }))}
-                  onSave={() => saveEditedSection("internalTasks", setInternalTasksState, storageKeys.internalTasks)}
-                  onCancel={cancelEditingSection}
-                  onReset={() =>
-                    resetEditedSection("internalTasks", internalTasks, setInternalTasksState, storageKeys.internalTasks)
-                  }
-                  error={editorError}
-                />
-                <EditableJsonSection
-                  title="التحليلات الشهرية"
-                  sectionKey="monthlyAnalytics"
-                  value={monthlyAnalyticsState}
-                  editingSection={editingSection}
-                  editorValue={editorValues.monthlyAnalytics || ""}
-                  onStartEdit={() => startEditingSection("monthlyAnalytics", monthlyAnalyticsState)}
-                  onChange={(value) => setEditorValues((current) => ({ ...current, monthlyAnalytics: value }))}
-                  onSave={() =>
-                    saveEditedSection("monthlyAnalytics", setMonthlyAnalyticsState, storageKeys.monthlyAnalytics)
-                  }
-                  onCancel={cancelEditingSection}
-                  onReset={() =>
-                    resetEditedSection("monthlyAnalytics", monthlyAnalytics, setMonthlyAnalyticsState, storageKeys.monthlyAnalytics)
-                  }
-                  error={editorError}
-                />
-                <EditableJsonSection
-                  title="أداء المعلمات"
-                  sectionKey="teacherPerformance"
-                  value={teacherPerformanceState}
-                  editingSection={editingSection}
-                  editorValue={editorValues.teacherPerformance || ""}
-                  onStartEdit={() => startEditingSection("teacherPerformance", teacherPerformanceState)}
-                  onChange={(value) => setEditorValues((current) => ({ ...current, teacherPerformance: value }))}
-                  onSave={() =>
-                    saveEditedSection("teacherPerformance", setTeacherPerformanceState, storageKeys.teacherPerformance)
-                  }
-                  onCancel={cancelEditingSection}
-                  onReset={() =>
-                    resetEditedSection(
-                      "teacherPerformance",
-                      teacherPerformance,
-                      setTeacherPerformanceState,
-                      storageKeys.teacherPerformance,
-                    )
-                  }
-                  error={editorError}
-                />
-              </CardContent>
-            </Card>
-          </TabsContent>
-        )}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>مؤشرات أداء المعلمات</CardTitle>
+                    <CardDescription>الالتزام، استكمال الرصد، وسرعة الاستجابة</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {teacherPerformanceState.map((teacher) => (
+                      <div key={teacher.id} className="rounded-lg border p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="font-medium">{teacher.name}</p>
+                          <span className="text-sm text-primary">{teacher.weeklyLoad}</span>
+                        </div>
+                        <div className="mt-2 grid grid-cols-3 gap-2 text-sm text-muted-foreground">
+                          <span>الحضور: {teacher.attendance}%</span>
+                          <span>الرصد: {teacher.gradeCompletion}%</span>
+                          <span>الاستجابة: {teacher.responseTime}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
           </Tabs>
         </>
       )}
@@ -1208,73 +654,6 @@ function QuickCardsGrid({
   )
 }
 
-function EditableJsonSection({
-  title,
-  sectionKey,
-  value,
-  editingSection,
-  editorValue,
-  onStartEdit,
-  onChange,
-  onSave,
-  onCancel,
-  onReset,
-  error,
-}: {
-  title: string
-  sectionKey: string
-  value: unknown
-  editingSection: string | null
-  editorValue: string
-  onStartEdit: () => void
-  onChange: (value: string) => void
-  onSave: () => void | Promise<void>
-  onCancel: () => void
-  onReset: () => void | Promise<void>
-  error: string | null
-}) {
-  const isEditing = editingSection === sectionKey
-
-  return (
-    <div className="rounded-lg border p-4 space-y-3">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div>
-          <p className="font-medium">{title}</p>
-          <p className="text-sm text-muted-foreground">يمكنك تعديل البيانات ثم حفظها مباشرة في النظام.</p>
-        </div>
-        <div className="flex gap-2">
-          {!isEditing ? (
-            <Button variant="outline" onClick={onStartEdit}>
-              تعديل
-            </Button>
-          ) : (
-            <>
-              <Button onClick={() => void onSave()}>حفظ</Button>
-              <Button variant="outline" onClick={onCancel}>
-                إلغاء
-              </Button>
-              <Button variant="destructive" onClick={() => void onReset()}>
-                استعادة الافتراضي
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {isEditing ? (
-        <div className="space-y-2">
-          <Textarea value={editorValue} onChange={(e) => onChange(e.target.value)} rows={12} dir="ltr" />
-          {error && <p className="text-sm text-red-600">{error}</p>}
-        </div>
-      ) : (
-        <pre className="overflow-auto rounded-md bg-slate-50 p-3 text-xs leading-6 text-slate-700" dir="ltr">
-          {JSON.stringify(value, null, 2)}
-        </pre>
-      )}
-    </div>
-  )
-}
-
 function CurrentPeriod() {
   const now = new Date()
   const hours = now.getHours()
@@ -1295,6 +674,8 @@ function CurrentPeriod() {
     return "الحصة الخامسة (10:45 - 11:30)"
   } else if (time >= 11 * 60 + 30 && time < 12 * 60 + 15) {
     return "الحصة السادسة (11:30 - 12:15)"
+  } else if (time >= 12 * 60 + 15 && time < 13 * 60) {
+    return "الحصة السابعة (12:15 - 13:00)"
   } else {
     return "لا توجد حصة حالياً"
   }

@@ -1,5 +1,4 @@
 import { defaultStudentRoster, mergeWithDefaultStudentRoster, type ManagedStudent } from "@/lib/student-roster"
-import { unifiedStudentRecord } from "@/lib/school-insights"
 import { teacherDirectory, teacherNameBySpecialization, type TeacherDirectoryEntry } from "@/lib/teachers-directory"
 
 export type AttendanceStatus = "present" | "absent" | "late" | "excused"
@@ -41,6 +40,8 @@ export interface PeriodSlot {
   start: string
   end: string
 }
+
+export type ClassScheduleMap = Record<string, DaySchedule[]>
 
 export interface GradeEntry {
   subject: string
@@ -213,6 +214,7 @@ export const defaultPeriodSlots: PeriodSlot[] = [
   { id: 5, name: "الرابعة", start: "11:20", end: "12:05" },
   { id: 6, name: "الخامسة", start: "12:10", end: "12:55" },
   { id: 7, name: "السادسة", start: "13:00", end: "13:45" },
+  { id: 8, name: "السابعة", start: "13:50", end: "14:35" },
 ]
 
 export const defaultScheduleData: DaySchedule[] = [
@@ -227,6 +229,7 @@ export const defaultScheduleData: DaySchedule[] = [
       { id: 5, time: "11:20 - 12:05", subject: "اللغة الإنجليزية", teacher: teacherNameBySpecialization["لغة إنجليزية"], room: "104" },
       { id: 6, time: "12:10 - 12:55", subject: "التربية الإسلامية", teacher: teacherNameBySpecialization["تربية إسلامية"], room: "105" },
       { id: 7, time: "13:00 - 13:45", subject: "الاجتماعيات", teacher: teacherNameBySpecialization["اجتماعيات"], room: "106" },
+      { id: 8, time: "13:50 - 14:35", subject: "الحاسوب", teacher: teacherNameBySpecialization["حاسب آلي"], room: "معمل 1" },
     ],
   },
   {
@@ -240,6 +243,7 @@ export const defaultScheduleData: DaySchedule[] = [
       { id: 5, time: "11:20 - 12:05", subject: "اللغة العربية", teacher: teacherNameBySpecialization["لغة عربية"], room: "102" },
       { id: 6, time: "12:10 - 12:55", subject: "التربية البدنية", teacher: teacherNameBySpecialization["تربية بدنية"], room: "ملعب" },
       { id: 7, time: "13:00 - 13:45", subject: "الحاسوب", teacher: teacherNameBySpecialization["حاسب آلي"], room: "معمل 1" },
+      { id: 8, time: "13:50 - 14:35", subject: "الفنية", teacher: teacherNameBySpecialization["فنية"], room: "107" },
     ],
   },
   {
@@ -253,6 +257,7 @@ export const defaultScheduleData: DaySchedule[] = [
       { id: 5, time: "11:20 - 12:05", subject: "العلوم", teacher: teacherNameBySpecialization["علوم"], room: "103" },
       { id: 6, time: "12:10 - 12:55", subject: "اللغة الإنجليزية", teacher: teacherNameBySpecialization["لغة إنجليزية"], room: "104" },
       { id: 7, time: "13:00 - 13:45", subject: "الفنية", teacher: teacherNameBySpecialization["فنية"], room: "107" },
+      { id: 8, time: "13:50 - 14:35", subject: "التربية الإسلامية", teacher: teacherNameBySpecialization["تربية إسلامية"], room: "105" },
     ],
   },
   {
@@ -266,6 +271,7 @@ export const defaultScheduleData: DaySchedule[] = [
       { id: 5, time: "11:20 - 12:05", subject: "الرياضيات", teacher: teacherNameBySpecialization["رياضيات"], room: "101" },
       { id: 6, time: "12:10 - 12:55", subject: "الحاسوب", teacher: teacherNameBySpecialization["حاسب آلي"], room: "معمل 1" },
       { id: 7, time: "13:00 - 13:45", subject: "اللغة الإنجليزية", teacher: teacherNameBySpecialization["لغة إنجليزية"], room: "104" },
+      { id: 8, time: "13:50 - 14:35", subject: "الاجتماعيات", teacher: teacherNameBySpecialization["اجتماعيات"], room: "106" },
     ],
   },
   {
@@ -279,177 +285,74 @@ export const defaultScheduleData: DaySchedule[] = [
       { id: 5, time: "11:20 - 12:05", subject: "اللغة العربية", teacher: teacherNameBySpecialization["لغة عربية"], room: "102" },
       { id: 6, time: "12:10 - 12:55", subject: "العلوم", teacher: teacherNameBySpecialization["علوم"], room: "103" },
       { id: 7, time: "13:00 - 13:45", subject: "التربية البدنية", teacher: teacherNameBySpecialization["تربية بدنية"], room: "ملعب" },
+      { id: 8, time: "13:50 - 14:35", subject: "الحاسوب", teacher: teacherNameBySpecialization["حاسب آلي"], room: "معمل 1" },
     ],
   },
-]
+].map((day) => ({
+  ...day,
+  periods: day.periods.map((period) => ({
+    ...period,
+    teacher: String(period.teacher || ""),
+  })),
+}))
 
-export const defaultSchoolClasses: SchoolClass[] = [
-  {
-    id: "1",
-    name: "١/١",
-    level: "١",
-    section: "١",
-    teacher: "أ. نورة الأحمد",
-    students: 25,
-    rating: 4.5,
-    capacity: 30,
-    term: "الترم الأول",
-  },
-  {
-    id: "2",
-    name: "١/٢",
-    level: "١",
-    section: "٢",
-    teacher: "أ. سارة المحمد",
-    students: 22,
-    rating: 4.2,
-    capacity: 30,
-    term: "الترم الأول",
-  },
-  {
-    id: "6",
-    name: "٢/١",
-    level: "٢",
-    section: "١",
-    teacher: "أ. منى العبدالله",
-    students: 30,
-    rating: 4.1,
-    capacity: 35,
-    term: "الترم الأول",
-  },
-  {
-    id: "7",
-    name: "٢/٢",
-    level: "٢",
-    section: "٢",
-    teacher: "أ. هند السعد",
-    students: 28,
-    rating: 3.9,
-    capacity: 35,
-    term: "الترم الأول",
-  },
-  {
-    id: "12",
-    name: "٣/١",
-    level: "٣",
-    section: "١",
-    teacher: "أ. عبير الخالد",
-    students: 32,
-    rating: 4.6,
-    capacity: 40,
-    term: "الترم الأول",
-  },
-  {
-    id: "3",
-    name: "١/٣",
-    level: "١",
-    section: "٣",
-    teacher: "أ. ريم الفهد",
-    students: 28,
-    rating: 3.8,
-    capacity: 30,
-    term: "الترم الثاني",
-  },
-  {
-    id: "4",
-    name: "١/٤",
-    level: "١",
-    section: "٤",
-    teacher: "أ. لمياء السلطان",
-    students: 26,
-    rating: 4,
-    capacity: 30,
-    term: "الترم الثاني",
-  },
-  {
-    id: "8",
-    name: "٢/٣",
-    level: "٢",
-    section: "٣",
-    teacher: "أ. أمل الناصر",
-    students: 26,
-    rating: 4.4,
-    capacity: 35,
-    term: "الترم الثاني",
-  },
-  {
-    id: "9",
-    name: "٢/٤",
-    level: "٢",
-    section: "٤",
-    teacher: "أ. نوف العتيبي",
-    students: 27,
-    rating: 4.3,
-    capacity: 35,
-    term: "الترم الثاني",
-  },
-  {
-    id: "13",
-    name: "٣/٢",
-    level: "٣",
-    section: "٢",
-    teacher: "أ. نورة الأحمد",
-    students: 30,
-    rating: 4.2,
-    capacity: 40,
-    term: "الترم الثاني",
-  },
-  {
-    id: "5",
-    name: "١/٥",
-    level: "١",
-    section: "٥",
-    teacher: "أ. سارة المحمد",
-    students: 24,
-    rating: 4.7,
-    capacity: 30,
-    term: "الترم الثاني",
-  },
-  {
-    id: "10",
-    name: "٢/٥",
-    level: "٢",
-    section: "٥",
-    teacher: "أ. منى العبدالله",
-    students: 29,
-    rating: 4.5,
-    capacity: 35,
-    term: "الترم الثاني",
-  },
-  {
-    id: "11",
-    name: "٢/٦",
-    level: "٢",
-    section: "٦",
-    teacher: "أ. هند السعد",
-    students: 31,
-    rating: 4.2,
-    capacity: 35,
-    term: "الترم الثاني",
-  },
-  {
-    id: "14",
-    name: "٣/٣",
-    level: "٣",
-    section: "٣",
-    teacher: "أ. عبير الخالد",
-    students: 28,
-    rating: 4.8,
-    capacity: 40,
-    term: "الترم الثاني",
-  },
-  {
-    id: "15",
-    name: "٣/٤",
-    level: "٣",
-    section: "٤",
-    teacher: "أ. ريم الفهد",
-    students: 34,
-    rating: 4.4,
-    capacity: 40,
-    term: "الترم الثاني",
-  },
-]
+const defaultSchoolClassDefinitions = [
+  { id: "1", name: "١/١", term: "الترم الأول" },
+  { id: "2", name: "١/٢", term: "الترم الأول" },
+  { id: "6", name: "٢/١", term: "الترم الأول" },
+  { id: "7", name: "٢/٢", term: "الترم الأول" },
+  { id: "12", name: "٣/١", term: "الترم الأول" },
+  { id: "3", name: "١/٣", term: "الترم الثاني" },
+  { id: "4", name: "١/٤", term: "الترم الثاني" },
+  { id: "8", name: "٢/٣", term: "الترم الثاني" },
+  { id: "9", name: "٢/٤", term: "الترم الثاني" },
+  { id: "13", name: "٣/٢", term: "الترم الثاني" },
+  { id: "5", name: "١/٥", term: "الترم الثاني" },
+  { id: "10", name: "٢/٥", term: "الترم الثاني" },
+  { id: "11", name: "٢/٦", term: "الترم الثاني" },
+  { id: "14", name: "٣/٣", term: "الترم الثاني" },
+  { id: "15", name: "٣/٤", term: "الترم الثاني" },
+] as const
+
+export const defaultSchoolClasses: SchoolClass[] = defaultSchoolClassDefinitions.map((entry) => {
+  const [level, section] = entry.name.split("/")
+  return {
+    id: entry.id,
+    name: entry.name,
+    level: (level || "١") as SchoolClass["level"],
+    section: section || "١",
+    teacher: "غير مسند",
+    students: 0,
+    rating: 0,
+    capacity: level === "٣" ? 40 : level === "٢" ? 35 : 30,
+    term: entry.term,
+  }
+})
+
+const uniqueNormalizedStrings = (values: Array<string | null | undefined>) =>
+  Array.from(
+    new Set(
+      values
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    ),
+  )
+
+const cloneScheduleData = (scheduleData: DaySchedule[]) =>
+  scheduleData.map((day) => ({
+    ...day,
+    periods: day.periods.map((period) => ({ ...period })),
+  }))
+
+export const getScheduleClassNames = (
+  classes: Partial<SchoolClass>[] = defaultSchoolClasses,
+  students: ManagedStudent[] = mergeWithDefaultStudentRoster(),
+) =>
+  uniqueNormalizedStrings([
+    ...scheduleClasses.map((entry) => entry.name),
+    ...(Array.isArray(classes) ? classes : []).map((entry) => entry.name),
+    ...(Array.isArray(students) ? students : []).map((student) => student.classroom),
+  ])
 
 export const defaultSchoolNotes: SchoolNote[] = [
   {
@@ -529,22 +432,7 @@ export const mapManagedStudentsToSchoolStudents = (students: ManagedStudent[]): 
       classroom: student.classroom,
     }))
 
-const buildInitialGradeEntries = (student: ManagedStudent, index: number): GradeEntry[] => {
-  const subjectRotation = [
-    ALL_SUBJECTS[index % ALL_SUBJECTS.length],
-    ALL_SUBJECTS[(index + 1) % ALL_SUBJECTS.length],
-    ALL_SUBJECTS[(index + 2) % ALL_SUBJECTS.length],
-  ]
-
-  return [
-    { subject: subjectRotation[0], grade: 78 + (index % 20), date: "2025-10-12", examType: "فصلي أول" },
-    { subject: subjectRotation[1], grade: 74 + ((index * 3) % 22), date: "2026-01-20", examType: "فصلي ثاني" },
-    { subject: subjectRotation[2], grade: 70 + ((index * 5) % 25), date: "2026-03-03", examType: "قصير" },
-  ].map((entry, entryIndex) => ({
-    ...entry,
-    grade: Math.min(100, Math.max(55, entry.grade + (Number.parseInt(student.id, 10) || entryIndex) % 4)),
-  }))
-}
+const buildInitialGradeEntries = (): GradeEntry[] => []
 
 export const mergeGradeStudentsWithRoster = (
   savedStudents: Partial<GradeStudent>[] = [],
@@ -553,7 +441,7 @@ export const mergeGradeStudentsWithRoster = (
   const normalizedSaved = Array.isArray(savedStudents) ? savedStudents : []
   const usedSavedIndexes = new Set<number>()
 
-  const mergedFromRoster = roster.map((student, index) => {
+  const mergedFromRoster = roster.map((student) => {
     const matchedIndex = normalizedSaved.findIndex(
       (candidate, candidateIndex) =>
         !usedSavedIndexes.has(candidateIndex) &&
@@ -578,81 +466,29 @@ export const mergeGradeStudentsWithRoster = (
             date: grade.date || "2025-10-12",
             examType: grade.examType || "فصلي أول",
           }))
-        : buildInitialGradeEntries(student, index),
-    } satisfies GradeStudent
+        : buildInitialGradeEntries(),
+      } satisfies GradeStudent
   })
 
-  const extraStudents = normalizedSaved.flatMap((student, index) => {
-    if (usedSavedIndexes.has(index) || !student.name) return []
-
-    return [
-      {
-        id: student.id || `extra-grade-${index + 1}`,
-        name: student.name,
-        class: normalizeClassLabel(student.class || "أول متوسط"),
-        section: normalizeSectionLabel(student.section),
-        grades: Array.isArray(student.grades)
-          ? student.grades.map((grade) => ({
-              subject: grade.subject || ALL_SUBJECTS[0],
-              grade: Number(grade.grade) || 0,
-              date: grade.date || "2025-10-12",
-              examType: grade.examType || "فصلي أول",
-            }))
-          : [],
-      } satisfies GradeStudent,
-    ]
-  })
-
-  return [...mergedFromRoster, ...extraStudents]
+  return mergedFromRoster
 }
 
-const buildSeedAttendanceStudents = (classroom: string, statuses: AttendanceStatus[]) =>
-  defaultStudentRoster
-    .filter((student) => student.classroom === classroom)
-    .slice(0, statuses.length)
-    .map((student, index) => ({
-      id: Number.parseInt(student.id, 10) || 1000 + index,
-      name: student.name,
-      status: statuses[index],
-      notes:
-        statuses[index] === "absent"
-          ? index % 2 === 0
-            ? "مرض"
-            : "ظروف عائلية"
-          : statuses[index] === "late"
-            ? "تأخرت 10 دقائق"
-            : statuses[index] === "excused"
-              ? "إذن طبي"
-              : undefined,
-    }))
-
-export const defaultAttendanceRecords: AttendanceRecord[] = [
-  {
-    id: 1,
-    date: "2026-03-10",
-    class: "١/١",
-    students: buildSeedAttendanceStudents("١/١", ["present", "present", "absent", "present", "present", "late", "excused", "present"]),
-    savedAt: "2026-03-10T08:30:00.000Z",
-  },
-  {
-    id: 2,
-    date: "2026-03-09",
-    class: "١/١",
-    students: buildSeedAttendanceStudents("١/١", ["present", "absent", "present", "present", "late", "present", "present", "present"]),
-    savedAt: "2026-03-09T08:45:00.000Z",
-  },
-]
+export const defaultAttendanceRecords: AttendanceRecord[] = []
 
 export const createDefaultGradeStudents = (students: ManagedStudent[] = mergeWithDefaultStudentRoster()) =>
   mergeGradeStudentsWithRoster([], students)
 
 export const createDefaultSchoolStudents = () => mergeWithDefaultStudentRoster(defaultStudentRoster)
 
-export const mergeTeacherDirectory = (savedTeachers: Partial<TeacherDirectoryEntry>[] = []) => {
+export const normalizeTeacherDirectoryEntries = (
+  savedTeachers: Partial<TeacherDirectoryEntry>[] = [],
+  fallbackTeachers: TeacherDirectoryEntry[] = [],
+) => {
   const normalizedSavedTeachers = Array.isArray(savedTeachers) ? savedTeachers : []
+  const normalizedFallbackTeachers = Array.isArray(fallbackTeachers) ? fallbackTeachers : []
   const usedIndexes = new Set<number>()
 
-  const mergedDefaults = teacherDirectory.map((teacher, index) => {
+  const mergedFallbacks = normalizedFallbackTeachers.map((teacher, index) => {
     const matchedIndex = normalizedSavedTeachers.findIndex(
       (candidate, candidateIndex) =>
         !usedIndexes.has(candidateIndex) &&
@@ -679,8 +515,8 @@ export const mergeTeacherDirectory = (savedTeachers: Partial<TeacherDirectoryEnt
       birthDate: String(matchedTeacher?.birthDate || teacher.birthDate || ""),
       address: String(matchedTeacher?.address || teacher.address || ""),
       notes: matchedTeacher?.notes || teacher.notes,
-      attendance: matchedTeacher?.attendance ?? teacher.attendance ?? 100,
-      performance: matchedTeacher?.performance ?? teacher.performance ?? 90,
+      attendance: matchedTeacher?.attendance ?? teacher.attendance,
+      performance: matchedTeacher?.performance ?? teacher.performance,
       lastLogin: matchedTeacher?.lastLogin || teacher.lastLogin,
       profileImage: matchedTeacher?.profileImage || teacher.profileImage,
       email: matchedTeacher?.email || teacher.email,
@@ -709,22 +545,25 @@ export const mergeTeacherDirectory = (savedTeachers: Partial<TeacherDirectoryEnt
         birthDate: String(teacher.birthDate || ""),
         address: String(teacher.address || ""),
         notes: teacher.notes,
-        attendance: teacher.attendance ?? 100,
-        performance: teacher.performance ?? 90,
+        attendance: teacher.attendance,
+        performance: teacher.performance,
         lastLogin: teacher.lastLogin,
         profileImage: teacher.profileImage,
         email: teacher.email,
         emergencyContact: teacher.emergencyContact,
         medicalNotes: teacher.medicalNotes,
-        joinDate: teacher.joinDate || "2026-03-11",
+        joinDate: teacher.joinDate || "",
         classes: normalizeStringArray(teacher.classes),
         subjects: normalizeStringArray(teacher.subjects),
       } satisfies TeacherDirectoryEntry,
     ]
   })
 
-  return [...mergedDefaults, ...extraTeachers]
+  return [...mergedFallbacks, ...extraTeachers]
 }
+
+export const mergeTeacherDirectory = (savedTeachers: Partial<TeacherDirectoryEntry>[] = []) =>
+  normalizeTeacherDirectoryEntries(savedTeachers, teacherDirectory)
 
 export const normalizeSchoolClasses = (classes: Partial<SchoolClass>[] = []) => {
   const normalizedClasses = Array.isArray(classes) ? classes : []
@@ -777,6 +616,7 @@ export const syncAttendanceRecordsWithStudents = (
     students
       .map((student) => ({
         key: Number.parseInt(student.id, 10),
+        id: Number.parseInt(student.id, 10),
         name: student.name,
         classroom: student.classroom,
       }))
@@ -785,27 +625,63 @@ export const syncAttendanceRecordsWithStudents = (
   )
 
   const byName = new Map(
-    students.map((student) => [normalizeText(student.name), { name: student.name, classroom: student.classroom }] as const),
+    students.map((student) => [
+      normalizeText(student.name),
+      {
+        id: Number.parseInt(student.id, 10),
+        name: student.name,
+        classroom: student.classroom,
+      },
+    ] as const),
   )
 
-  return (Array.isArray(records) ? records : []).map((record, recordIndex) => ({
-    id: Number(record.id) || recordIndex + 1,
-    date: record.date,
-    class: record.class,
-    savedAt: record.savedAt,
-    students: (Array.isArray(record.students) ? record.students : []).map((student, studentIndex) => {
+  return (Array.isArray(records) ? records : []).flatMap((record, recordIndex) => {
+    const seenStudents = new Set<number>()
+    const syncedStudents = (Array.isArray(record.students) ? record.students : []).flatMap((student, studentIndex) => {
       const byId = byNumericId.get(Number(student.id))
       const byStudentName = byName.get(normalizeText(student.name))
-      const matched = byId && byId.classroom === record.class ? byId : byStudentName && byStudentName.classroom === record.class ? byStudentName : null
+      const matched =
+        byId && byId.classroom === record.class
+          ? byId
+          : byStudentName && byStudentName.classroom === record.class
+            ? byStudentName
+            : null
 
-      return {
-        id: Number(student.id) || 1000 + studentIndex,
-        name: matched?.name || student.name,
-        status: student.status,
-        notes: student.notes,
-      } satisfies AttendanceStudent
-    }),
-  }))
+      if (!matched) {
+        return []
+      }
+
+      const resolvedId = Number.isFinite(matched.id) ? matched.id : Number(student.id) || 1000 + studentIndex
+      if (seenStudents.has(resolvedId)) {
+        return []
+      }
+
+      seenStudents.add(resolvedId)
+
+      return [
+        {
+          id: resolvedId,
+          name: matched.name,
+          status: student.status,
+          notes: student.notes,
+        } satisfies AttendanceStudent,
+      ]
+    })
+
+    if (syncedStudents.length === 0) {
+      return []
+    }
+
+    return [
+      {
+        id: Number(record.id) || recordIndex + 1,
+        date: record.date,
+        class: record.class,
+        savedAt: record.savedAt,
+        students: syncedStudents,
+      } satisfies AttendanceRecord,
+    ]
+  })
 }
 
 const syncPeriods = (periods: Period[], periodSlots: PeriodSlot[]) =>
@@ -821,26 +697,145 @@ const syncPeriods = (periods: Period[], periodSlots: PeriodSlot[]) =>
     }
   })
 
+const normalizePeriodSlots = (periodSlots: PeriodSlot[] = defaultPeriodSlots) => {
+  const savedSlots = new Map(
+    (Array.isArray(periodSlots) ? periodSlots : [])
+      .map((slot) => ({
+        id: Number(slot.id),
+        slot,
+      }))
+      .filter((entry) => Number.isFinite(entry.id))
+      .map((entry) => [entry.id, entry.slot] as const),
+  )
+
+  return defaultPeriodSlots.map((defaultSlot) => {
+    const savedSlot = savedSlots.get(defaultSlot.id)
+
+    return {
+      id: defaultSlot.id,
+      name: savedSlot?.name || defaultSlot.name,
+      start: savedSlot?.start || defaultSlot.start,
+      end: savedSlot?.end || defaultSlot.end,
+    } satisfies PeriodSlot
+  })
+}
+
+const buildOrderedPeriodIds = (periodSlots: PeriodSlot[]) => [
+  ...periodSlots
+    .filter((slot) => slot.id < 4)
+    .sort((left, right) => left.id - right.id)
+    .map((slot) => slot.id),
+  4,
+  ...periodSlots
+    .filter((slot) => slot.id > 4)
+    .sort((left, right) => left.id - right.id)
+    .map((slot) => slot.id),
+]
+
+const buildNormalizedPeriods = (
+  periods: Period[] = [],
+  periodSlots: PeriodSlot[],
+  fallbackPeriods: Period[] = [],
+  defaultFallbackPeriods: Period[] = [],
+) => {
+  const existingPeriods = new Map((Array.isArray(periods) ? periods : []).map((period) => [Number(period.id), period] as const))
+  const fallbackById = new Map((Array.isArray(fallbackPeriods) ? fallbackPeriods : []).map((period) => [Number(period.id), period] as const))
+  const defaultFallbackById = new Map(
+    (Array.isArray(defaultFallbackPeriods) ? defaultFallbackPeriods : []).map((period) => [Number(period.id), period] as const),
+  )
+
+  return buildOrderedPeriodIds(periodSlots).map((periodId) => {
+    if (periodId === 4) {
+      const existingBreak = existingPeriods.get(4)
+      const fallbackBreak = fallbackById.get(4)
+      const defaultFallbackBreak = defaultFallbackById.get(4)
+
+      return {
+        id: 4,
+        time: existingBreak?.time || fallbackBreak?.time || defaultFallbackBreak?.time || "10:30 - 11:15",
+        subject: "استراحة",
+        teacher: "",
+        room: "",
+      } satisfies Period
+    }
+
+    const slot = periodSlots.find((entry) => entry.id === periodId)
+    const existingPeriod = existingPeriods.get(periodId)
+    const fallbackPeriod = fallbackById.get(periodId)
+    const defaultFallbackPeriod = defaultFallbackById.get(periodId)
+    const hydratedFallbackPeriod = fallbackPeriod?.subject ? fallbackPeriod : defaultFallbackPeriod
+    const shouldHydrateLegacySeventhPeriod =
+      periodId === 8 &&
+      !existingPeriod?.subject &&
+      !existingPeriod?.teacher &&
+      !existingPeriod?.room &&
+      Boolean(hydratedFallbackPeriod?.subject)
+    const resolvedPeriod = shouldHydrateLegacySeventhPeriod ? hydratedFallbackPeriod : existingPeriod
+
+    return {
+      id: periodId,
+      time: slot ? `${slot.start} - ${slot.end}` : resolvedPeriod?.time || fallbackPeriod?.time || defaultFallbackPeriod?.time || "",
+      subject: resolvedPeriod?.subject ?? fallbackPeriod?.subject ?? defaultFallbackPeriod?.subject ?? "",
+      teacher: resolvedPeriod?.teacher ?? fallbackPeriod?.teacher ?? defaultFallbackPeriod?.teacher ?? "",
+      room: resolvedPeriod?.room ?? fallbackPeriod?.room ?? defaultFallbackPeriod?.room ?? "",
+    } satisfies Period
+  })
+}
+
 export const normalizeSchedulePayload = (
   scheduleData: DaySchedule[] = defaultScheduleData,
   periodSlots: PeriodSlot[] = defaultPeriodSlots,
+  fallbackScheduleData: DaySchedule[] = defaultScheduleData,
 ) => {
-  const normalizedSlots = (Array.isArray(periodSlots) ? periodSlots : defaultPeriodSlots).map((slot, index) => ({
-    id: Number(slot.id) || defaultPeriodSlots[index]?.id || index + 1,
-    name: slot.name || defaultPeriodSlots[index]?.name || `الحصة ${index + 1}`,
-    start: slot.start || defaultPeriodSlots[index]?.start || "08:00",
-    end: slot.end || defaultPeriodSlots[index]?.end || "08:45",
-  }))
+  const normalizedSlots = normalizePeriodSlots(periodSlots)
+  const sourceSchedule = Array.isArray(scheduleData) && scheduleData.length > 0 ? scheduleData : defaultScheduleData
 
-  const normalizedSchedule = (Array.isArray(scheduleData) ? scheduleData : defaultScheduleData).map((day, dayIndex) => ({
-    id: Number(day.id) || dayIndex + 1,
-    day: day.day || defaultScheduleData[dayIndex]?.day || `اليوم ${dayIndex + 1}`,
-    periods: syncPeriods(Array.isArray(day.periods) ? day.periods : defaultScheduleData[dayIndex]?.periods || [], normalizedSlots),
-  }))
+  const normalizedSchedule = sourceSchedule.map((day, dayIndex) => {
+    const dayPeriods = Array.isArray(day.periods) ? day.periods : []
+    const fallbackPeriods = fallbackScheduleData[dayIndex]?.periods || []
+    const defaultFallbackPeriods = defaultScheduleData[dayIndex]?.periods || []
+
+    return {
+      id: Number(day.id) || dayIndex + 1,
+      day: day.day || defaultScheduleData[dayIndex]?.day || `اليوم ${dayIndex + 1}`,
+      periods: buildNormalizedPeriods(dayPeriods, normalizedSlots, fallbackPeriods, defaultFallbackPeriods),
+    }
+  })
 
   return {
     scheduleData: normalizedSchedule,
     periodSlots: normalizedSlots,
+  }
+}
+
+export const normalizeClassSchedulesPayload = (
+  classSchedules: ClassScheduleMap = {},
+  periodSlots: PeriodSlot[] = defaultPeriodSlots,
+  classNames: string[] = scheduleClasses.map((entry) => entry.name),
+  fallbackScheduleData: DaySchedule[] = defaultScheduleData,
+) => {
+  const normalizedSlots = normalizePeriodSlots(periodSlots)
+
+  const fallbackSchedule = normalizeSchedulePayload(fallbackScheduleData, normalizedSlots, defaultScheduleData).scheduleData
+  const resolvedClassNames = uniqueNormalizedStrings([...classNames, ...Object.keys(classSchedules)])
+  const normalizedClassNames =
+    resolvedClassNames.length > 0 ? resolvedClassNames : [scheduleClasses[0]?.name || defaultSchoolClasses[0]?.name || "١/١"]
+
+  const normalizedClassSchedules = Object.fromEntries(
+    normalizedClassNames.map((className) => {
+      const rawSchedule = Array.isArray(classSchedules[className]) ? classSchedules[className] : fallbackSchedule
+      const normalizedSchedule = normalizeSchedulePayload(rawSchedule, normalizedSlots, fallbackScheduleData).scheduleData
+
+      return [className, normalizedSchedule]
+    }),
+  ) as ClassScheduleMap
+
+  const firstClassName = normalizedClassNames[0]
+
+  return {
+    classSchedules: normalizedClassSchedules,
+    periodSlots: normalizedSlots,
+    scheduleData: cloneScheduleData(normalizedClassSchedules[firstClassName] || fallbackSchedule),
   }
 }
 
@@ -930,7 +925,7 @@ const calculateAttendanceRate = (student: ManagedStudent, attendanceRecords: Att
   })
 
   if (matchedStatuses.length === 0) {
-    return student.attendance ?? unifiedStudentRecord.attendanceRate
+    return student.attendance ?? 0
   }
 
   const attendedCount = matchedStatuses.filter((status) => status !== "absent").length
@@ -943,7 +938,7 @@ const calculateAverageGrade = (student: ManagedStudent, gradeStudents: GradeStud
   )
 
   if (!matchedStudent || matchedStudent.grades.length === 0) {
-    return student.academicPerformance ?? unifiedStudentRecord.averageGrade
+    return student.academicPerformance ?? 0
   }
 
   const total = matchedStudent.grades.reduce((sum, entry) => sum + entry.grade, 0)
@@ -965,21 +960,44 @@ const buildDefaultStudentProfile = (
   gradeStudents: GradeStudent[],
   attendanceRecords: AttendanceRecord[],
 ) => {
+  const hasAttendanceData =
+    typeof student.attendance === "number" ||
+    attendanceRecords.some(
+      (record) =>
+        record.class === student.classroom &&
+        record.students.some(
+          (entry) =>
+            Number(entry.id) === Number.parseInt(student.id, 10) || normalizeText(entry.name) === normalizeText(student.name),
+        ),
+    )
+  const matchedGradeStudent = gradeStudents.find(
+    (entry) => entry.id === student.id || normalizeText(entry.name) === normalizeText(student.name),
+  )
+  const hasGradeData = typeof student.academicPerformance === "number" || Boolean(matchedGradeStudent?.grades.length)
+  const hasBehaviorData = typeof student.behaviorRating === "number"
   const attendanceRate = calculateAttendanceRate(student, attendanceRecords)
   const averageGrade = calculateAverageGrade(student, gradeStudents)
-  const behaviorScore = student.behaviorRating ?? unifiedStudentRecord.behaviorScore
+  const behaviorScore = student.behaviorRating ?? 0
+  const riskLevel =
+    hasAttendanceData || hasGradeData || hasBehaviorData
+      ? deriveRiskLevel(
+          hasAttendanceData ? attendanceRate : 100,
+          hasGradeData ? averageGrade : 100,
+          hasBehaviorData ? behaviorScore : 100,
+        )
+      : "منخفض"
 
   return {
     id: student.id,
     name: student.name,
     className: student.classroom,
-    guardian: student.parentPhone ? `ولية الأمر: ${student.parentPhone}` : unifiedStudentRecord.guardian,
+    guardian: student.parentPhone ? `ولية الأمر: ${student.parentPhone}` : "",
     attendanceRate,
     averageGrade,
     behaviorScore,
-    riskLevel: deriveRiskLevel(attendanceRate, averageGrade, behaviorScore),
-    strengths: unifiedStudentRecord.strengths,
-    supportNeeds: unifiedStudentRecord.supportNeeds,
+    riskLevel,
+    strengths: [],
+    supportNeeds: [],
   } satisfies StudentProfileRecord
 }
 
@@ -1012,41 +1030,22 @@ export const mergeStudentProfilesWithStudents = (
       name: student.name,
       className: String(savedProfile?.className || defaultProfile.className).trim(),
       guardian: String(savedProfile?.guardian || defaultProfile.guardian).trim(),
-      attendanceRate: Number(savedProfile?.attendanceRate) || defaultProfile.attendanceRate,
-      averageGrade: Number(savedProfile?.averageGrade) || defaultProfile.averageGrade,
-      behaviorScore: Number(savedProfile?.behaviorScore) || defaultProfile.behaviorScore,
+      attendanceRate: Number.isFinite(Number(savedProfile?.attendanceRate))
+        ? Number(savedProfile?.attendanceRate)
+        : defaultProfile.attendanceRate,
+      averageGrade: Number.isFinite(Number(savedProfile?.averageGrade))
+        ? Number(savedProfile?.averageGrade)
+        : defaultProfile.averageGrade,
+      behaviorScore: Number.isFinite(Number(savedProfile?.behaviorScore))
+        ? Number(savedProfile?.behaviorScore)
+        : defaultProfile.behaviorScore,
       riskLevel: (savedProfile?.riskLevel || defaultProfile.riskLevel) as RiskLevel,
       strengths: normalizeStringArray(savedProfile?.strengths, defaultProfile.strengths),
       supportNeeds: normalizeStringArray(savedProfile?.supportNeeds, defaultProfile.supportNeeds),
     } satisfies StudentProfileRecord
   })
 
-  const extraProfiles = normalizedProfiles.flatMap((profile, index) => {
-    if (usedIndexes.has(index) || !profile.name) {
-      return []
-    }
-
-    const attendanceRate = Number(profile.attendanceRate) || unifiedStudentRecord.attendanceRate
-    const averageGrade = Number(profile.averageGrade) || unifiedStudentRecord.averageGrade
-    const behaviorScore = Number(profile.behaviorScore) || unifiedStudentRecord.behaviorScore
-
-    return [
-      {
-        id: String(profile.id || `student-profile-${index + 1}`),
-        name: String(profile.name).trim(),
-        className: String(profile.className || unifiedStudentRecord.className).trim(),
-        guardian: String(profile.guardian || unifiedStudentRecord.guardian).trim(),
-        attendanceRate,
-        averageGrade,
-        behaviorScore,
-        riskLevel: (profile.riskLevel || deriveRiskLevel(attendanceRate, averageGrade, behaviorScore)) as RiskLevel,
-        strengths: normalizeStringArray(profile.strengths, unifiedStudentRecord.strengths),
-        supportNeeds: normalizeStringArray(profile.supportNeeds, unifiedStudentRecord.supportNeeds),
-      } satisfies StudentProfileRecord,
-    ]
-  })
-
-  return [...mergedProfiles, ...extraProfiles]
+  return mergedProfiles
 }
 
 export const createDefaultStudentProfiles = (

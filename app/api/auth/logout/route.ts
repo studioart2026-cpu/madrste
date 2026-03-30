@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
 import { getSessionIdFromCookies } from "@/lib/server/auth-route"
 import { logoutUser } from "@/lib/server/auth-store"
-import { SESSION_COOKIE_NAME } from "@/lib/server/session"
+import { SESSION_COOKIE_NAME, shouldUseSecureSessionCookie } from "@/lib/server/session"
 
 export const runtime = "nodejs"
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const sessionId = await getSessionIdFromCookies()
     await logoutUser(sessionId)
@@ -17,7 +17,7 @@ export async function POST() {
       path: "/",
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      secure: shouldUseSecureSessionCookie(request),
       expires: new Date(0),
     })
     return response

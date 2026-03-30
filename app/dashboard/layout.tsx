@@ -10,7 +10,6 @@ import {
   Bell,
   BookText,
   Calendar,
-  ClipboardList,
   GraduationCap,
   Home,
   HelpCircle,
@@ -266,13 +265,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       href: "/dashboard/reports",
       icon: <FileText className="w-5 h-5 ml-2" />,
       active: pathname === "/dashboard/reports",
-      showFor: ["student", "teacher", "admin", "vice_admin"],
-    },
-    {
-      label: "الملف الموحد",
-      href: "/dashboard/student-profile",
-      icon: <ClipboardList className="w-5 h-5 ml-2" />,
-      active: pathname === "/dashboard/student-profile",
       showFor: ["student", "teacher", "admin", "vice_admin"],
     },
     {

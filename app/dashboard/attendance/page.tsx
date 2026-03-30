@@ -37,8 +37,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/components/auth-provider"
 import { fetchAttendanceData, saveAttendanceRecords as saveAttendanceRecordsData } from "@/lib/school-api"
-import { defaultAttendanceRecords, type AttendanceRecord, type SchoolStudentSummary } from "@/lib/school-data"
-import { defaultClassrooms, mergeWithDefaultStudentRoster } from "@/lib/student-roster"
+import { type AttendanceRecord, type SchoolStudentSummary } from "@/lib/school-data"
 
 // Define student type
 interface Student {
@@ -77,26 +76,13 @@ export default function AttendancePage() {
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [searchTerm, setSearchTerm] = useState("")
-  const [schoolStudents, setSchoolStudents] = useState<SchoolStudent[]>(
-    mapToSchoolStudents(
-      mergeWithDefaultStudentRoster().map((student) => ({
-        id: student.id,
-        name: student.name,
-        classroom: student.classroom,
-      })),
-    ),
-  )
+  const [schoolStudents, setSchoolStudents] = useState<SchoolStudent[]>([])
   const [hasLoadedFromServer, setHasLoadedFromServer] = useState(false)
   const hasInitializedPersistence = useRef(false)
 
-  const studentEmailToName: Record<string, string> = {
-    "student@example.com": "سارة أحمد",
-    "student2@example.com": "نورة محمد",
-  }
-  const inferredStudentName = normalizeText(userName || (email ? studentEmailToName[email] || "" : ""))
+  const inferredStudentName = normalizeText(userName || email || "")
 
-  // Dummy data for attendance records
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(defaultAttendanceRecords)
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([])
 
   // Current attendance record based on selected date and class
   const [currentRecord, setCurrentRecord] = useState<AttendanceRecord | null>(null)
@@ -114,7 +100,7 @@ export default function AttendancePage() {
         if (!isActive) return
         toast({
           title: "تعذر تحميل بيانات الحضور",
-          description: error instanceof Error ? error.message : "تم استخدام البيانات الحالية مؤقتًا",
+          description: error instanceof Error ? error.message : "تعذر تحميل بيانات الحضور من الخادم",
           variant: "destructive",
         })
       } finally {
@@ -148,7 +134,7 @@ export default function AttendancePage() {
   const classOptions = useMemo(() => {
     const classes = Array.from(new Set(schoolStudents.map((student) => student.classroom)))
     if (classes.length > 0) return classes.sort((a, b) => a.localeCompare(b, "ar"))
-    return defaultClassrooms
+    return []
   }, [schoolStudents])
 
   const studentProfile = useMemo(() => {
@@ -170,7 +156,7 @@ export default function AttendancePage() {
     }
 
     if (!selectedClass || !visibleClassOptions.includes(selectedClass)) {
-      setSelectedClass(visibleClassOptions[0])
+      setSelectedClass(visibleClassOptions[0] || "")
     }
   }, [isStudent, selectedClass, visibleClassOptions, studentProfile])
 
@@ -193,12 +179,10 @@ export default function AttendancePage() {
     const record = attendanceRecords.find((record) => record.date === formattedDate && record.class === selectedClass)
 
     if (record) {
-      const syncedStudents = classRoster.length
-        ? classRoster.map((baseStudent) => {
-            const existing = record.students.find((s) => s.id === baseStudent.id || s.name === baseStudent.name)
-            return existing ? { ...baseStudent, status: existing.status, notes: existing.notes } : baseStudent
-          })
-        : record.students
+      const syncedStudents = classRoster.map((baseStudent) => {
+        const existing = record.students.find((s) => s.id === baseStudent.id || s.name === baseStudent.name)
+        return existing ? { ...baseStudent, status: existing.status, notes: existing.notes } : baseStudent
+      })
 
       setCurrentRecord({ ...record, students: syncedStudents })
     } else {
@@ -207,19 +191,7 @@ export default function AttendancePage() {
         id: Math.max(0, ...attendanceRecords.map((record) => record.id)) + 1,
         date: formattedDate,
         class: selectedClass,
-        students:
-          classRoster.length > 0
-            ? classRoster
-            : [
-                { id: 1, name: "سارة أحمد", status: "present" },
-                { id: 2, name: "نورة محمد", status: "present" },
-                { id: 3, name: "هند خالد", status: "present" },
-                { id: 4, name: "ريم عبدالله", status: "present" },
-                { id: 5, name: "لمى سعد", status: "present" },
-                { id: 6, name: "دانة فهد", status: "present" },
-                { id: 7, name: "منى علي", status: "present" },
-                { id: 8, name: "جواهر سلطان", status: "present" },
-              ],
+        students: classRoster,
       }
       setCurrentRecord(newRecord)
     }
@@ -371,6 +343,7 @@ export default function AttendancePage() {
         excused: 0,
         presentPercentage: 0,
       }
+  const absentPercentage = attendanceStats.total > 0 ? (attendanceStats.absent / attendanceStats.total) * 100 : 0
 
   return (
     <div className="space-y-6">
@@ -685,7 +658,7 @@ export default function AttendancePage() {
                   <div>
                     <p className="text-sm font-medium text-gray-500">نسبة الغياب</p>
                     <h3 className="text-3xl font-bold mt-1 text-red-600">
-                      {((attendanceStats.absent / attendanceStats.total) * 100).toFixed(1)}%
+                      {absentPercentage.toFixed(1)}%
                     </h3>
                   </div>
                   <div className="h-16 w-16 bg-red-100 rounded-full flex items-center justify-center">
@@ -695,7 +668,7 @@ export default function AttendancePage() {
                 <div className="mt-4 h-3 bg-gray-100 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-red-500 rounded-full transition-all duration-500 ease-in-out"
-                    style={{ width: `${(attendanceStats.absent / attendanceStats.total) * 100}%` }}
+                    style={{ width: `${absentPercentage}%` }}
                   />
                 </div>
               </CardContent>

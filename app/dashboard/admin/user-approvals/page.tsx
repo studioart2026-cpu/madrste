@@ -21,65 +21,6 @@ import {
 } from "@/components/ui/alert-dialog"
 import { CheckCircle, Eye, RefreshCw, UserCheck, UserX, XCircle } from "lucide-react"
 import type { RegistrationRequest } from "@/lib/auth-types"
-import { fetchStudents, saveStudents } from "@/lib/school-api"
-import type { ManagedStudent } from "@/lib/student-roster"
-
-const addApprovedStudentToDirectory = async (request: RegistrationRequest) => {
-  if (request.userType !== "student") return
-
-  try {
-    const response = await fetchStudents()
-    const students = Array.isArray(response.students) ? response.students : []
-
-    const normalizedName = request.name.trim()
-    const normalizedPhone = (request.phoneNumber || "").replace(/\D/g, "")
-    const alreadyExists = students.some((student) => {
-      const name = typeof student.name === "string" ? student.name.trim() : ""
-      const parentPhone = typeof student.parentPhone === "string" ? student.parentPhone.replace(/\D/g, "") : ""
-      return name === normalizedName || (normalizedPhone.length > 0 && parentPhone === normalizedPhone)
-    })
-    if (alreadyExists) return
-
-    const nextId =
-      Math.max(
-        0,
-        ...students
-          .map((student) => Number.parseInt(String(student.id ?? "0"), 10))
-          .filter((value) => Number.isFinite(value)),
-      ) + 1
-
-    const nextStudentId =
-      Math.max(
-        10000,
-        ...students
-          .map((student) => Number.parseInt(String(student.studentId ?? "0"), 10))
-          .filter((value) => Number.isFinite(value)),
-      ) + 1
-
-    students.push({
-      id: nextId.toString(),
-      name: normalizedName,
-      studentId: nextStudentId.toString(),
-      grade: "أول متوسط",
-      classroom: "١/١",
-      parentPhone: request.phoneNumber || "",
-      status: "نشط",
-      birthDate: "",
-      address: "",
-      attendance: 100,
-      academicPerformance: 85,
-      behaviorRating: 90,
-      joinDate: new Date().toISOString().split("T")[0],
-      lastLogin: new Date().toISOString().split("T")[0],
-      activities: [],
-      notes: "تمت إضافتها تلقائيًا بعد الموافقة على التسجيل",
-    } satisfies ManagedStudent)
-
-    await saveStudents(students)
-  } catch {
-    // ignore sync failures here and allow approval flow to continue
-  }
-}
 
 export default function UserApprovalsPage() {
   const { toast } = useToast()
@@ -153,7 +94,6 @@ export default function UserApprovalsPage() {
 
     try {
       await approveUser(currentRequest.id)
-      await addApprovedStudentToDirectory(currentRequest)
       setApproveDialogOpen(false)
       toast({
         title: "تمت الموافقة بنجاح",

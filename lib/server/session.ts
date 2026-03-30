@@ -17,6 +17,28 @@ export function createSignedSessionValue(sessionId: string) {
   return `${sessionId}.${signSessionId(sessionId)}`
 }
 
+export function shouldUseSecureSessionCookie(request: Request) {
+  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase()
+  if (forwardedProto) {
+    return forwardedProto === "https"
+  }
+
+  try {
+    const { protocol, hostname } = new URL(request.url)
+    const normalizedHostname = hostname.trim().toLowerCase()
+    const isLocalhost =
+      normalizedHostname === "localhost" || normalizedHostname === "127.0.0.1" || normalizedHostname === "::1"
+
+    if (isLocalhost) {
+      return false
+    }
+
+    return protocol === "https:"
+  } catch {
+    return process.env.NODE_ENV === "production"
+  }
+}
+
 export function parseSignedSessionValue(value: string | undefined) {
   if (!value) {
     return null

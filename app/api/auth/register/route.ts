@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { registerUser } from "@/lib/server/auth-store"
-import { createSignedSessionValue, SESSION_COOKIE_NAME, SESSION_DURATION_MS } from "@/lib/server/session"
+import { createSignedSessionValue, SESSION_COOKIE_NAME, SESSION_DURATION_MS, shouldUseSecureSessionCookie } from "@/lib/server/session"
 import type { RegistrationUserType } from "@/lib/auth-types"
 
 export const runtime = "nodejs"
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
       value: createSignedSessionValue(result.sessionId),
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      secure: shouldUseSecureSessionCookie(request),
       path: "/",
       expires: new Date(Date.now() + SESSION_DURATION_MS),
     })

@@ -71,8 +71,6 @@ import { fetchStudents as fetchStudentsData, saveStudents as saveStudentsData } 
 import {
   defaultClassrooms as classrooms,
   defaultGrades as grades,
-  defaultStudentRoster,
-  mergeWithDefaultStudentRoster,
 } from "@/lib/student-roster"
 
 const normalizeArabicText = (value: string) =>
@@ -148,7 +146,7 @@ export default function StudentsPage() {
   const STUDENTS_PER_PAGE = 20
   const { toast } = useToast()
   const { userName } = useAuth()
-  const [students, setStudents] = useState<Student[]>(defaultStudentRoster)
+  const [students, setStudents] = useState<Student[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [filterGrade, setFilterGrade] = useState<string>("")
   const [filterClassroom, setFilterClassroom] = useState<string>("")
@@ -192,7 +190,7 @@ export default function StudentsPage() {
 
     try {
       const response = await saveStudentsData(nextStudents)
-      setStudents(mergeWithDefaultStudentRoster(response.students))
+      setStudents(response.students)
       return true
     } catch (error) {
       setStudents(previousStudents)
@@ -207,8 +205,7 @@ export default function StudentsPage() {
     }
   }
 
-  // نموذج إضافة طالبة جديدة
-  const [newStudent, setNewStudent] = useState<Omit<Student, "id">>({
+  const createEmptyStudentDraft = (): Omit<Student, "id"> => ({
     name: "",
     studentId: "",
     grade: "",
@@ -217,11 +214,14 @@ export default function StudentsPage() {
     status: "نشط",
     birthDate: "",
     address: "",
-    attendance: 100,
-    academicPerformance: 85,
-    behaviorRating: 90,
+    attendance: undefined,
+    academicPerformance: undefined,
+    behaviorRating: undefined,
     activities: [],
   })
+
+  // نموذج إضافة طالبة جديدة
+  const [newStudent, setNewStudent] = useState<Omit<Student, "id">>(createEmptyStudentDraft)
 
   useEffect(() => {
     let isActive = true
@@ -231,15 +231,14 @@ export default function StudentsPage() {
       try {
         const response = await fetchStudentsData()
         if (!isActive) return
-        setStudents(mergeWithDefaultStudentRoster(response.students))
+        setStudents(response.students)
       } catch (error) {
         if (!isActive) return
         toast({
           title: "تعذر تحميل الطالبات",
-          description: error instanceof Error ? error.message : "تم استخدام البيانات الافتراضية مؤقتًا",
+          description: error instanceof Error ? error.message : "تعذر تحميل بيانات الطالبات من الخادم",
           variant: "destructive",
         })
-        setStudents(defaultStudentRoster)
       } finally {
         if (isActive) {
           setIsLoading(false)
@@ -388,7 +387,7 @@ export default function StudentsPage() {
       parentPhone: newStudent.parentPhone.trim(),
       id: newId,
       joinDate: new Date().toISOString().split("T")[0],
-      lastLogin: new Date().toISOString().split("T")[0],
+      lastLogin: "",
     }
 
     const saveSucceeded = await persistStudents([...students, studentWithId])
@@ -401,20 +400,7 @@ export default function StudentsPage() {
     })
 
     // إعادة تعيين نموذج الإضافة
-    setNewStudent({
-      name: "",
-      studentId: "",
-      grade: "",
-      classroom: "",
-      parentPhone: "",
-      status: "نشط",
-      birthDate: "",
-      address: "",
-      attendance: 100,
-      academicPerformance: 85,
-      behaviorRating: 90,
-      activities: [],
-    })
+    setNewStudent(createEmptyStudentDraft())
   }
 
   // تعديل بيانات طالبة
@@ -434,12 +420,12 @@ export default function StudentsPage() {
     })
   }
 
-  // حذف طالبة
   const handleDeleteStudent = async () => {
     if (!currentStudent) return
 
     const saveSucceeded = await persistStudents(students.filter((student) => student.id !== currentStudent.id))
     if (!saveSucceeded) return
+
     setDeleteDialogOpen(false)
     toast({
       title: "تم الحذف بنجاح",
@@ -493,6 +479,7 @@ export default function StudentsPage() {
     if (selectedStudents.length === 0) return
 
     let updatedStudents = [...students]
+    const nextStatus: Student["status"] = action === "activate" ? "نشط" : "غير نشط"
     let actionMessage = ""
 
     if (action === "delete") {
@@ -503,11 +490,12 @@ export default function StudentsPage() {
         if (selectedStudents.includes(student.id)) {
           return {
             ...student,
-            status: action === "activate" ? "نشط" : "غير نشط",
+            status: nextStatus,
           }
         }
         return student
       })
+
       actionMessage =
         action === "activate" ? "تم تنشيط الطالبات المحددة بنجاح" : "تم إلغاء تنشيط الطالبات المحددة بنجاح"
     }
@@ -542,7 +530,7 @@ export default function StudentsPage() {
       setIsLoading(true)
       try {
         const response = await fetchStudentsData()
-        setStudents(mergeWithDefaultStudentRoster(response.students))
+        setStudents(response.students)
         toast({
           title: "تم تحديث البيانات",
           description: "تم تحميل أحدث بيانات الطالبات بنجاح",
@@ -565,12 +553,12 @@ export default function StudentsPage() {
     active: students.filter((s) => s.status === "نشط").length,
     inactive: students.filter((s) => s.status === "غير نشط").length,
     transferred: students.filter((s) => s.status === "منقول").length,
-    averageAttendance: Math.round(
-      students.reduce((sum, student) => sum + (student.attendance || 0), 0) / students.length,
-    ),
-    averagePerformance: Math.round(
-      students.reduce((sum, student) => sum + (student.academicPerformance || 0), 0) / students.length,
-    ),
+    averageAttendance: students.length
+      ? Math.round(students.reduce((sum, student) => sum + (student.attendance || 0), 0) / students.length)
+      : 0,
+    averagePerformance: students.length
+      ? Math.round(students.reduce((sum, student) => sum + (student.academicPerformance || 0), 0) / students.length)
+      : 0,
   }
 
   // تبديل حالة حقل التصدير
@@ -742,7 +730,7 @@ export default function StudentsPage() {
         >
           <div>
             <h1 className="text-3xl font-bold">إدارة الطالبات</h1>
-            <p className="text-gray-500 mt-1">إضافة وتعديل وحذف بيانات الطالبات</p>
+            <p className="text-gray-500 mt-1">إضافة وتعديل بيانات الطالبات</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -936,7 +924,7 @@ export default function StudentsPage() {
                     </DropdownMenuContent>
                   </DropdownMenu>
                   <Button variant="destructive" size="sm" onClick={() => setBulkActionDialogOpen(true)}>
-                    <Trash2 className="h-4 w-4 ml-1" />
+                    <Trash2 className="ml-1 h-4 w-4" />
                     حذف المحدد
                   </Button>
                 </>
@@ -1619,7 +1607,7 @@ export default function StudentsPage() {
                                     setDeleteDialogOpen(true)
                                   }}
                                 >
-                                  <Trash2 className="h-4 w-4 ml-1" />
+                                  <Trash2 className="ml-1 h-4 w-4" />
                                   حذف
                                 </Button>
                                 <Button
@@ -2101,7 +2089,6 @@ export default function StudentsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* مربع حوار حذف طالبة */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -2317,7 +2304,6 @@ export default function StudentsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* مربع حوار الإجراءات المتعددة */}
       <AlertDialog open={bulkActionDialogOpen} onOpenChange={setBulkActionDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

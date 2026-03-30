@@ -10,54 +10,7 @@ export interface RegistrationRequest {
   status: "pending" | "approved" | "rejected"
 }
 
-// بيانات تجريبية لطلبات التسجيل
-export const initialRequests: RegistrationRequest[] = [
-  {
-    id: "1",
-    name: "نورة محمد",
-    email: "noura@example.com",
-    userType: "teacher",
-    phoneNumber: "0501234567",
-    date: "2023-05-10",
-    status: "pending",
-  },
-  {
-    id: "2",
-    name: "سارة أحمد",
-    email: "sara@example.com",
-    userType: "student",
-    phoneNumber: "0551234567",
-    date: "2023-05-11",
-    status: "pending",
-  },
-  {
-    id: "3",
-    name: "هند خالد",
-    email: "hind@example.com",
-    userType: "teacher",
-    phoneNumber: "0561234567",
-    date: "2023-05-09",
-    status: "approved",
-  },
-  {
-    id: "4",
-    name: "ريم سعد",
-    email: "reem@example.com",
-    userType: "student",
-    phoneNumber: "0571234567",
-    date: "2023-05-08",
-    status: "rejected",
-  },
-  {
-    id: "5",
-    name: "لمى عبدالله",
-    email: "lama@example.com",
-    userType: "teacher",
-    phoneNumber: "0581234567",
-    date: "2023-05-12",
-    status: "pending",
-  },
-]
+export const initialRequests: RegistrationRequest[] = []
 
 // مخزن طلبات التسجيل - نمط Singleton للتأكد من وجود نسخة واحدة فقط
 class RegistrationStore {

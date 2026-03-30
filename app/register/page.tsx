@@ -31,6 +31,19 @@ export default function RegisterPage() {
   const { toast } = useToast()
   const { registerWithVerification, isReady } = useAuth()
 
+  const navigateAfterAuth = (destination: string) => {
+    router.replace(destination)
+    router.refresh()
+
+    if (typeof window !== "undefined") {
+      window.setTimeout(() => {
+        if (window.location.pathname !== destination) {
+          window.location.assign(destination)
+        }
+      }, 150)
+    }
+  }
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setIsLoading(true)
@@ -50,7 +63,7 @@ export default function RegisterPage() {
       })
 
       // توجيه المستخدم مباشرة إلى صفحة انتظار الموافقة
-      router.push("/pending-approval")
+      navigateAfterAuth("/pending-approval")
     } catch (err) {
       setError(err instanceof Error ? err.message : "حدث خطأ أثناء التسجيل")
     } finally {

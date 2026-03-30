@@ -13,7 +13,7 @@ function buildErrorResponse(error: unknown) {
   if (message === "403") {
     return NextResponse.json({ error: "ليست لديك صلاحية الوصول" }, { status: 403 })
   }
-  if (message.includes("العثور") || message.includes("البريد") || message.includes("معلقة")) {
+  if (message.includes("العثور") || message.includes("البريد") || message.includes("معلقة") || message.includes("محمي")) {
     return NextResponse.json({ error: message }, { status: 400 })
   }
   return NextResponse.json({ error: message }, { status: 500 })
@@ -42,10 +42,15 @@ export async function PATCH(
       role?: UserType
       status?: ManagedUserStatus
       phoneNumber?: string
+      password?: string
     }
 
     if (!body.name || !body.email || !body.role || !body.status) {
       return NextResponse.json({ error: "بيانات المستخدم غير مكتملة" }, { status: 400 })
+    }
+
+    if (body.password && body.password.trim().length > 0 && body.password.trim().length < 8) {
+      return NextResponse.json({ error: "كلمة المرور يجب أن تكون 8 أحرف على الأقل" }, { status: 400 })
     }
 
     const user = await updateManagedUser({
@@ -55,6 +60,7 @@ export async function PATCH(
       role: body.role,
       status: body.status,
       phoneNumber: body.phoneNumber,
+      password: body.password,
     })
 
     return NextResponse.json({ user })

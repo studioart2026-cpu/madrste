@@ -2,7 +2,7 @@ import "server-only"
 
 import { promises as fs } from "node:fs"
 import path from "node:path"
-import { randomUUID } from "node:crypto"
+import { createHash, randomBytes, randomUUID } from "node:crypto"
 import type {
   AdminManagedUser,
   AuthUser,
@@ -12,6 +12,8 @@ import type {
   SessionUser,
   UserType,
 } from "@/lib/auth-types"
+import type { ManagedStudent } from "@/lib/student-roster"
+import type { TeacherDirectoryEntry } from "@/lib/teachers-directory"
 import { hashPassword, verifyPassword } from "@/lib/server/password"
 import { getServerDataDirectory } from "@/lib/server/data-directory"
 import { SESSION_DURATION_MS } from "@/lib/server/session"
@@ -20,6 +22,7 @@ interface StoredUser extends AuthUser {
   passwordHash: string
   passwordSalt: string
   accountStatus: Extract<ManagedUserStatus, "active" | "inactive">
+  isDeletionProtected?: boolean
 }
 
 interface StoredSession {
@@ -29,10 +32,19 @@ interface StoredSession {
   expiresAt: string
 }
 
+interface PasswordResetToken {
+  id: string
+  email: string
+  tokenHash: string
+  createdAt: string
+  expiresAt: string
+}
+
 interface AuthDatabase {
   users: StoredUser[]
   registrationRequests: RegistrationRequest[]
   sessions: StoredSession[]
+  passwordResetTokens: PasswordResetToken[]
 }
 
 const DATA_DIRECTORY = getServerDataDirectory()
@@ -45,6 +57,7 @@ const seedUsers: Array<{
   userType: UserType
   phoneNumber?: string
   isApproved: boolean
+  isDeletionProtected?: boolean
 }> = [
   {
     name: "مدير النظام",
@@ -52,6 +65,7 @@ const seedUsers: Array<{
     password: "Mo1020304050",
     userType: "admin" as const,
     isApproved: true,
+    isDeletionProtected: true,
   },
   {
     name: "الجازي العقيل",
@@ -61,60 +75,26 @@ const seedUsers: Array<{
     phoneNumber: "0501111111",
     isApproved: true,
   },
-  {
-    name: "سارة محمد",
-    email: "teacher@example.com",
-    password: "teacher123",
-    userType: "teacher" as const,
-    phoneNumber: "0501234567",
-    isApproved: true,
-  },
-  {
-    name: "نورة أحمد",
-    email: "teacher2@example.com",
-    password: "teacher123",
-    userType: "teacher" as const,
-    phoneNumber: "0502345678",
-    isApproved: true,
-  },
-  {
-    name: "عبدالله محمد",
-    email: "student@example.com",
-    password: "student123",
-    userType: "student" as const,
-    phoneNumber: "0503456789",
-    isApproved: true,
-  },
-  {
-    name: "فهد خالد",
-    email: "student2@example.com",
-    password: "student123",
-    userType: "student" as const,
-    phoneNumber: "0504567890",
-    isApproved: true,
-  },
 ]
 
-const seedRequests: RegistrationRequest[] = [
-  {
-    id: "seed-request-1",
-    name: "نورة محمد",
-    email: "noura@example.com",
-    userType: "teacher",
-    phoneNumber: "0501234567",
-    date: "2026-03-11",
-    status: "pending",
-  },
-  {
-    id: "seed-request-2",
-    name: "سارة أحمد",
-    email: "sara@example.com",
-    userType: "student",
-    phoneNumber: "0551234567",
-    date: "2026-03-11",
-    status: "pending",
-  },
-] satisfies RegistrationRequest[]
+const seedRequests: RegistrationRequest[] = []
+
+const demoUserEmails = new Set([
+  "teacher@example.com",
+  "teacher2@example.com",
+  "student@example.com",
+  "student2@example.com",
+])
+
+const demoRequestEmails = new Set([
+  "noura@example.com",
+  "sara@example.com",
+])
+
+const DELETION_PROTECTED_EMAILS = new Set(["mohamm3dalfeel@gmail.com"])
+const PASSWORD_RESET_TOKEN_DURATION_MS = 1000 * 60 * 30
+
+export const PASSWORD_RESET_TOKEN_DURATION_MINUTES = PASSWORD_RESET_TOKEN_DURATION_MS / (1000 * 60)
 
 let mutationQueue = Promise.resolve()
 
@@ -123,12 +103,43 @@ function todayIsoDate() {
 }
 
 function toPublicUser(user: StoredUser): AuthUser {
-  const { passwordHash: _passwordHash, passwordSalt: _passwordSalt, accountStatus: _accountStatus, ...publicUser } = user
+  const {
+    passwordHash: _passwordHash,
+    passwordSalt: _passwordSalt,
+    accountStatus: _accountStatus,
+    isDeletionProtected: _isDeletionProtected,
+    ...publicUser
+  } = user
   return publicUser
 }
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase()
+}
+
+function isDeletionProtectedUser(input: { email: string; isDeletionProtected?: boolean }) {
+  return Boolean(input.isDeletionProtected) || DELETION_PROTECTED_EMAILS.has(normalizeEmail(input.email))
+}
+
+function hashPasswordResetToken(token: string) {
+  return createHash("sha256").update(token).digest("hex")
+}
+
+function normalizePhone(value: string | undefined) {
+  return String(value || "").replace(/\D/g, "")
+}
+
+function normalizeTeacherName(value: string | undefined) {
+  return String(value || "")
+    .replace(/^أ\.\s*/u, "")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function normalizeStudentName(value: string | undefined) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
 }
 
 function formatLastActive(value: string | undefined) {
@@ -201,6 +212,7 @@ function toManagedUser(user: StoredUser, sessions: StoredSession[]): AdminManage
     lastActive: formatLastActive(lastSession?.createdAt || user.createdAt),
     createdAt: user.createdAt,
     phoneNumber: user.phoneNumber,
+    isDeletionProtected: isDeletionProtectedUser(user),
   }
 }
 
@@ -219,10 +231,12 @@ function createSeedDatabase(): AuthDatabase {
         passwordHash: password.hash,
         passwordSalt: password.salt,
         accountStatus: "active",
+        isDeletionProtected: user.isDeletionProtected,
       }
     }),
     registrationRequests: [...seedRequests],
     sessions: [],
+    passwordResetTokens: [],
   }
 }
 
@@ -239,16 +253,41 @@ async function readDatabase(): Promise<AuthDatabase> {
   await ensureDatabaseFile()
   const raw = await fs.readFile(AUTH_DATA_FILE, "utf8")
   const parsed = JSON.parse(raw) as AuthDatabase
-  return {
-    users: Array.isArray(parsed.users)
-      ? parsed.users.map((user) => ({
+
+  const users = Array.isArray(parsed.users)
+    ? parsed.users
+        .map((user) => ({
           ...user,
           email: normalizeEmail(String(user.email || "")),
-          accountStatus: user.accountStatus === "inactive" ? "inactive" : "active",
+          accountStatus: (user.accountStatus === "inactive" ? "inactive" : "active") as StoredUser["accountStatus"],
         }))
+        .filter((user) => !demoUserEmails.has(user.email))
+    : []
+
+  const knownEmails = new Set(users.map((user) => user.email))
+
+  return {
+    users,
+    registrationRequests: Array.isArray(parsed.registrationRequests)
+      ? parsed.registrationRequests.filter((request) => {
+          const normalizedEmail = normalizeEmail(String(request.email || ""))
+          return !demoRequestEmails.has(normalizedEmail) && !demoUserEmails.has(normalizedEmail)
+        })
       : [],
-    registrationRequests: Array.isArray(parsed.registrationRequests) ? parsed.registrationRequests : [],
-    sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
+    sessions: Array.isArray(parsed.sessions)
+      ? parsed.sessions.filter((session) => knownEmails.has(normalizeEmail(session.userEmail)))
+      : [],
+    passwordResetTokens: Array.isArray(parsed.passwordResetTokens)
+      ? parsed.passwordResetTokens
+          .map((token) => ({
+            id: String(token.id || ""),
+            email: normalizeEmail(String(token.email || "")),
+            tokenHash: String(token.tokenHash || ""),
+            createdAt: String(token.createdAt || ""),
+            expiresAt: String(token.expiresAt || ""),
+          }))
+          .filter((token) => token.id && token.tokenHash && knownEmails.has(token.email))
+      : [],
   }
 }
 
@@ -280,6 +319,11 @@ function pruneExpiredSessions(data: AuthDatabase) {
   data.sessions = data.sessions.filter((session) => new Date(session.expiresAt).getTime() > now)
 }
 
+function pruneExpiredPasswordResetTokens(data: AuthDatabase) {
+  const now = Date.now()
+  data.passwordResetTokens = data.passwordResetTokens.filter((token) => new Date(token.expiresAt).getTime() > now)
+}
+
 export async function getSessionUser(sessionId: string | null): Promise<SessionUser | null> {
   if (!sessionId) {
     return null
@@ -302,6 +346,24 @@ export async function getSessionUser(sessionId: string | null): Promise<SessionU
     ...toPublicUser(user),
     isEmailVerified: true,
   }
+}
+
+export async function renewSession(sessionId: string | null) {
+  if (!sessionId) {
+    return false
+  }
+
+  return mutateDatabase((data) => {
+    pruneExpiredSessions(data)
+
+    const session = data.sessions.find((entry) => entry.id === sessionId)
+    if (!session) {
+      return false
+    }
+
+    session.expiresAt = new Date(Date.now() + SESSION_DURATION_MS).toISOString()
+    return true
+  })
 }
 
 export async function loginUser(email: string, password: string) {
@@ -466,20 +528,117 @@ export async function updateRegistrationRequestStatus(input: {
   })
 }
 
-export async function changePassword(input: {
-  requesterEmail: string
-  requesterRole: UserType
-  targetEmail?: string
-  currentPassword?: string
+export async function createPasswordResetRequest(email: string) {
+  return mutateDatabase((data) => {
+    pruneExpiredPasswordResetTokens(data)
+
+    const normalizedEmail = normalizeEmail(email)
+    const user = data.users.find((entry) => entry.email === normalizedEmail)
+    if (!user || user.accountStatus === "inactive") {
+      return null
+    }
+
+    data.passwordResetTokens = data.passwordResetTokens.filter((entry) => entry.email !== normalizedEmail)
+
+    const rawToken = randomBytes(32).toString("hex")
+    const createdAt = new Date().toISOString()
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_DURATION_MS).toISOString()
+
+    data.passwordResetTokens.push({
+      id: randomUUID(),
+      email: normalizedEmail,
+      tokenHash: hashPasswordResetToken(rawToken),
+      createdAt,
+      expiresAt,
+    })
+
+    return {
+      email: normalizedEmail,
+      name: user.name,
+      token: rawToken,
+      expiresAt,
+    }
+  })
+}
+
+export async function validatePasswordResetToken(token: string) {
+  const normalizedToken = token.trim()
+  if (!normalizedToken) {
+    return null
+  }
+
+  const data = await readDatabase()
+  const tokenHash = hashPasswordResetToken(normalizedToken)
+  const matchedToken = data.passwordResetTokens.find((entry) => entry.tokenHash === tokenHash)
+  if (!matchedToken) {
+    return null
+  }
+
+  if (new Date(matchedToken.expiresAt).getTime() <= Date.now()) {
+    return null
+  }
+
+  const user = data.users.find((entry) => entry.email === matchedToken.email)
+  if (!user || user.accountStatus === "inactive") {
+    return null
+  }
+
+  return {
+    email: matchedToken.email,
+    expiresAt: matchedToken.expiresAt,
+  }
+}
+
+export async function resetPasswordWithToken(input: {
+  token: string
   newPassword: string
 }) {
   return mutateDatabase((data) => {
+    pruneExpiredPasswordResetTokens(data)
+
+    const tokenHash = hashPasswordResetToken(input.token.trim())
+    const matchedToken = data.passwordResetTokens.find((entry) => entry.tokenHash === tokenHash)
+    if (!matchedToken) {
+      throw new Error("رابط إعادة التعيين غير صالح أو انتهت صلاحيته")
+    }
+
+    const user = data.users.find((entry) => entry.email === matchedToken.email)
+    if (!user || user.accountStatus === "inactive") {
+      throw new Error("رابط إعادة التعيين غير صالح أو انتهت صلاحيته")
+    }
+
+    const passwordHash = hashPassword(input.newPassword)
+    user.passwordHash = passwordHash.hash
+    user.passwordSalt = passwordHash.salt
+
+    data.passwordResetTokens = data.passwordResetTokens.filter((entry) => entry.email !== user.email)
+    data.sessions = data.sessions.filter((entry) => entry.userEmail !== user.email)
+
+    return {
+      email: user.email,
+    }
+  })
+}
+
+export async function changePassword(input: {
+  requesterEmail: string
+  requesterRole: UserType
+  targetEmail: string
+  newPassword: string
+}) {
+  return mutateDatabase((data) => {
+    pruneExpiredPasswordResetTokens(data)
+
     const normalizedRequesterEmail = normalizeEmail(input.requesterEmail)
-    const normalizedTargetEmail = normalizeEmail(input.targetEmail || input.requesterEmail)
+    const normalizedTargetEmail = normalizeEmail(input.targetEmail)
     const requester = data.users.find((entry) => entry.email === normalizedRequesterEmail)
 
     if (!requester) {
       throw new Error("تعذر التحقق من المستخدم الحالي")
+    }
+
+    if (input.requesterRole !== "admin") {
+      throw new Error("تغيير كلمات المرور من مهام مدير النظام فقط")
     }
 
     const targetUser = data.users.find((entry) => entry.email === normalizedTargetEmail)
@@ -487,23 +646,10 @@ export async function changePassword(input: {
       throw new Error("لم يتم العثور على الحساب المطلوب")
     }
 
-    const isSelfService = normalizedRequesterEmail === normalizedTargetEmail
-    if (isSelfService) {
-      if (!input.currentPassword) {
-        throw new Error("كلمة المرور الحالية مطلوبة")
-      }
-
-      const isValidCurrent = verifyPassword(input.currentPassword, requester.passwordHash, requester.passwordSalt)
-      if (!isValidCurrent) {
-        throw new Error("كلمة المرور الحالية غير صحيحة")
-      }
-    } else if (input.requesterRole !== "admin") {
-      throw new Error("ليست لديك صلاحية لتغيير كلمة مرور حساب آخر")
-    }
-
     const passwordHash = hashPassword(input.newPassword)
     targetUser.passwordHash = passwordHash.hash
     targetUser.passwordSalt = passwordHash.salt
+    data.passwordResetTokens = data.passwordResetTokens.filter((entry) => entry.email !== normalizedTargetEmail)
   })
 }
 
@@ -513,6 +659,8 @@ export async function updateUserProfile(input: {
   nextEmail: string
 }) {
   return mutateDatabase((data) => {
+    pruneExpiredPasswordResetTokens(data)
+
     const normalizedCurrentEmail = normalizeEmail(input.currentEmail)
     const normalizedNextEmail = normalizeEmail(input.nextEmail)
     const user = data.users.find((entry) => entry.email === normalizedCurrentEmail)
@@ -549,6 +697,8 @@ export async function updateUserProfile(input: {
           }
         : session,
     )
+
+    data.passwordResetTokens = data.passwordResetTokens.filter((entry) => entry.email !== normalizedCurrentEmail)
 
     return {
       ...toPublicUser(user),
@@ -613,13 +763,19 @@ export async function updateManagedUser(input: {
   role: UserType
   status: ManagedUserStatus
   phoneNumber?: string
+  password?: string
 }) {
   return mutateDatabase((data) => {
     pruneExpiredSessions(data)
+    pruneExpiredPasswordResetTokens(data)
 
     const user = data.users.find((entry) => entry.id === input.id)
     if (!user) {
       throw new Error("لم يتم العثور على المستخدم")
+    }
+
+    if (isDeletionProtectedUser(user)) {
+      user.isDeletionProtected = true
     }
 
     if (input.status === "pending" && !["teacher", "student", "parent"].includes(input.role)) {
@@ -659,6 +815,20 @@ export async function updateManagedUser(input: {
             }
           : session,
       )
+
+      data.passwordResetTokens = data.passwordResetTokens.filter((entry) => entry.email !== previousEmail)
+    }
+
+    if (input.password?.trim()) {
+      const passwordHash = hashPassword(input.password.trim())
+      user.passwordHash = passwordHash.hash
+      user.passwordSalt = passwordHash.salt
+      data.sessions = data.sessions.filter(
+        (session) => session.userEmail !== previousEmail && session.userEmail !== normalizedEmail,
+      )
+      data.passwordResetTokens = data.passwordResetTokens.filter(
+        (entry) => entry.email !== previousEmail && entry.email !== normalizedEmail,
+      )
     }
 
     if (input.status === "inactive") {
@@ -673,15 +843,158 @@ export async function updateManagedUser(input: {
 
 export async function deleteManagedUser(userId: string) {
   return mutateDatabase((data) => {
+    pruneExpiredPasswordResetTokens(data)
+
     const user = data.users.find((entry) => entry.id === userId)
     if (!user) {
       throw new Error("لم يتم العثور على المستخدم")
     }
 
+    if (isDeletionProtectedUser(user)) {
+      throw new Error("لا يمكن حذف هذا الحساب المحمي")
+    }
+
     data.users = data.users.filter((entry) => entry.id !== userId)
     data.registrationRequests = data.registrationRequests.filter((request) => request.email !== user.email)
     data.sessions = data.sessions.filter((session) => session.userEmail !== user.email)
+    data.passwordResetTokens = data.passwordResetTokens.filter((entry) => entry.email !== user.email)
 
     return true
+  })
+}
+
+export async function deleteManagedTeacherAccountsByDirectoryEntries(
+  teachers: Array<Pick<TeacherDirectoryEntry, "name" | "email" | "phone">>,
+) {
+  const normalizedTeachers = teachers
+    .map((teacher) => ({
+      name: normalizeTeacherName(teacher.name),
+      email: teacher.email ? normalizeEmail(teacher.email) : "",
+      phone: normalizePhone(teacher.phone),
+    }))
+    .filter((teacher) => teacher.name || teacher.email || teacher.phone)
+
+  if (normalizedTeachers.length === 0) {
+    return 0
+  }
+
+  return mutateDatabase((data) => {
+    pruneExpiredSessions(data)
+
+    const removedEmails = new Set<string>()
+
+    const shouldRemoveTeacher = (input: {
+      name?: string
+      email?: string
+      phone?: string
+      userType?: UserType | RegistrationUserType
+    }) => {
+      if (input.userType && input.userType !== "teacher") {
+        return false
+      }
+
+      const normalizedName = normalizeTeacherName(input.name)
+      const normalizedEmail = input.email ? normalizeEmail(input.email) : ""
+      const normalizedPhone = normalizePhone(input.phone)
+
+      return normalizedTeachers.some((teacher) => {
+        if (teacher.email && normalizedEmail) {
+          return teacher.email === normalizedEmail
+        }
+
+        if (teacher.phone && normalizedPhone) {
+          return teacher.phone === normalizedPhone
+        }
+
+        return teacher.name.length > 0 && teacher.name === normalizedName
+      })
+    }
+
+    data.users.forEach((user) => {
+      if (user.userType === "teacher" && shouldRemoveTeacher(user)) {
+        removedEmails.add(user.email)
+      }
+    })
+
+    data.users = data.users.filter((user) => !removedEmails.has(user.email))
+    data.sessions = data.sessions.filter((session) => !removedEmails.has(session.userEmail))
+    data.registrationRequests = data.registrationRequests.filter((request) => {
+      if (removedEmails.has(normalizeEmail(request.email))) {
+        return false
+      }
+
+      return !shouldRemoveTeacher({
+        name: request.name,
+        email: request.email,
+        phone: request.phoneNumber,
+        userType: request.userType,
+      })
+    })
+
+    return removedEmails.size
+  })
+}
+
+export async function deleteManagedStudentAccountsByDirectoryEntries(
+  students: Array<Pick<ManagedStudent, "name" | "parentPhone">>,
+) {
+  const normalizedStudents = students
+    .map((student) => ({
+      name: normalizeStudentName(student.name),
+      phone: normalizePhone(student.parentPhone),
+    }))
+    .filter((student) => student.name || student.phone)
+
+  if (normalizedStudents.length === 0) {
+    return 0
+  }
+
+  return mutateDatabase((data) => {
+    pruneExpiredSessions(data)
+
+    const removedEmails = new Set<string>()
+
+    const shouldRemoveStudent = (input: {
+      name?: string
+      phone?: string
+      userType?: UserType | RegistrationUserType
+    }) => {
+      if (input.userType && input.userType !== "student") {
+        return false
+      }
+
+      const normalizedName = normalizeStudentName(input.name)
+      const normalizedPhone = normalizePhone(input.phone)
+
+      return normalizedStudents.some((student) => {
+        if (student.phone && normalizedPhone) {
+          return student.phone === normalizedPhone
+        }
+
+        return student.name.length > 0 && student.name === normalizedName
+      })
+    }
+
+    data.users.forEach((user) => {
+      if (user.userType === "student" && shouldRemoveStudent(user)) {
+        removedEmails.add(user.email)
+      }
+    })
+
+    data.users = data.users.filter((user) => !removedEmails.has(user.email))
+    data.sessions = data.sessions.filter((session) => !removedEmails.has(session.userEmail))
+    data.registrationRequests = data.registrationRequests.filter((request) => {
+      if (removedEmails.has(normalizeEmail(request.email))) {
+        return false
+      }
+
+      return !shouldRemoveStudent({
+        name: request.name,
+        phone: request.phoneNumber,
+        userType: request.userType,
+      })
+    })
+
+    return removedEmails.size
   })
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getCurrentSessionUser } from "@/lib/server/auth-route"
 import { listRegistrationRequests, updateRegistrationRequestStatus } from "@/lib/server/auth-store"
+import { syncApprovedRegistrationRequestToSchoolData } from "@/lib/server/school-store"
 
 export const runtime = "nodejs"
 
@@ -39,6 +40,10 @@ export async function POST(request: Request) {
       requestId: body.requestId,
       status: nextStatus,
     })
+
+    if (nextStatus === "approved") {
+      await syncApprovedRegistrationRequestToSchoolData(updatedRequest)
+    }
 
     return NextResponse.json({ request: updatedRequest })
   } catch (error) {

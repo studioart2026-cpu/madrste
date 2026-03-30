@@ -53,6 +53,8 @@ import { format, isBefore, addDays } from "date-fns"
 import { ar } from "date-fns/locale"
 import { Progress } from "@/components/ui/progress"
 import { useAuth } from "@/components/auth-provider"
+import { fetchClassesData, fetchStudents as fetchStudentsData } from "@/lib/school-api"
+import { defaultClassrooms } from "@/lib/student-roster"
 
 // Define homework type
 interface Homework {
@@ -71,15 +73,170 @@ interface Homework {
   totalStudents?: number
 }
 
+const fallbackHomeworkClasses = defaultClassrooms
+
+const legacyHomeworkClassMap: Record<string, string> = {
+  "1أ": "١/١",
+  "1ب": "١/٢",
+  "2أ": "٢/١",
+  "2ب": "٢/٢",
+  "3أ": "٣/١",
+  "3ب": "٣/٢",
+}
+
+const normalizeHomeworkClass = (className: string) => legacyHomeworkClassMap[className] || className
+const normalizeLookupText = (value: string) => value.replace(/\s+/g, " ").trim().toLowerCase()
+
+const normalizeHomeworkClasses = (classes: string[]) => {
+  const classOrder = new Map(fallbackHomeworkClasses.map((className, index) => [className, index] as const))
+
+  return Array.from(new Set(classes.map((className) => normalizeHomeworkClass(className.trim())).filter(Boolean))).sort(
+    (left, right) => {
+      const leftOrder = classOrder.get(left) ?? Number.MAX_SAFE_INTEGER
+      const rightOrder = classOrder.get(right) ?? Number.MAX_SAFE_INTEGER
+
+      if (leftOrder !== rightOrder) {
+        return leftOrder - rightOrder
+      }
+
+      return left.localeCompare(right, "ar")
+    },
+  )
+}
+
+const buildHomeworkTemplate = (className: string): Omit<Homework, "id" | "createdAt" | "status"> => ({
+  title: "",
+  subject: "رياضيات",
+  class: className,
+  dueDate: format(addDays(new Date(), 7), "yyyy-MM-dd"),
+  description: "",
+  priority: "medium",
+})
+
+const initialHomeworks: Homework[] = ([
+  {
+    id: 1,
+    title: "واجب الوحدة الخامسة",
+    subject: "رياضيات",
+    class: "1أ",
+    dueDate: "2025-05-20",
+    status: "active",
+    description: "حل تمارين الصفحات 45-48 من كتاب الرياضيات",
+    priority: "high",
+    createdAt: "2025-05-15T10:30:00",
+    submissionCount: 15,
+    totalStudents: 25,
+    attachments: ["واجب_الرياضيات.pdf"],
+  },
+  {
+    id: 2,
+    title: "تجربة علمية",
+    subject: "علوم",
+    class: "1أ",
+    dueDate: "2025-05-22",
+    status: "active",
+    description: "كتابة تقرير عن التجربة العلمية التي تم إجراؤها في المختبر",
+    priority: "medium",
+    createdAt: "2025-05-14T11:15:00",
+    submissionCount: 8,
+    totalStudents: 25,
+  },
+  {
+    id: 3,
+    title: "قراءة قصة",
+    subject: "لغة عربية",
+    class: "1أ",
+    dueDate: "2025-05-18",
+    status: "completed",
+    description: "قراءة القصة في الصفحات 30-35 وتلخيصها",
+    priority: "medium",
+    createdAt: "2025-05-10T09:45:00",
+    completedAt: "2025-05-18T14:30:00",
+    submissionCount: 23,
+    totalStudents: 25,
+  },
+  {
+    id: 4,
+    title: "مشروع نهاية الفصل",
+    subject: "اجتماعيات",
+    class: "1أ",
+    dueDate: "2025-05-30",
+    status: "active",
+    description: "إعداد مشروع عن الحضارات القديمة وتقديمه أمام الفصل",
+    priority: "high",
+    createdAt: "2025-05-12T13:20:00",
+    submissionCount: 5,
+    totalStudents: 25,
+    attachments: ["تعليمات_المشروع.pdf", "نموذج_التقييم.docx"],
+  },
+  {
+    id: 5,
+    title: "تمارين الفصل الثالث",
+    subject: "لغة إنجليزية",
+    class: "1ب",
+    dueDate: "2025-05-17",
+    status: "overdue",
+    description: "حل تمارين الفصل الثالث من كتاب اللغة الإنجليزية",
+    priority: "low",
+    createdAt: "2025-05-10T10:00:00",
+    submissionCount: 18,
+    totalStudents: 23,
+  },
+  {
+    id: 6,
+    title: "حفظ سورة الملك",
+    subject: "تربية إسلامية",
+    class: "2أ",
+    dueDate: "2025-05-25",
+    status: "active",
+    description: "حفظ سورة الملك كاملة والاستعداد للتسميع",
+    priority: "high",
+    createdAt: "2025-05-15T08:30:00",
+    submissionCount: 10,
+    totalStudents: 27,
+  },
+  {
+    id: 7,
+    title: "رسم منظر طبيعي",
+    subject: "فنية",
+    class: "2ب",
+    dueDate: "2025-05-19",
+    status: "completed",
+    description: "رسم منظر طبيعي باستخدام الألوان المائية",
+    priority: "medium",
+    createdAt: "2025-05-12T11:30:00",
+    completedAt: "2025-05-19T12:45:00",
+    submissionCount: 22,
+    totalStudents: 24,
+  },
+  {
+    id: 8,
+    title: "بحث عن الطاقة المتجددة",
+    subject: "علوم",
+    class: "3أ",
+    dueDate: "2025-05-28",
+    status: "active",
+    description: "إعداد بحث عن مصادر الطاقة المتجددة وأهميتها للبيئة",
+    priority: "high",
+    createdAt: "2025-05-14T09:15:00",
+    submissionCount: 12,
+    totalStudents: 26,
+    attachments: ["مراجع_البحث.pdf"],
+  },
+ ] satisfies Homework[]).map((homework): Homework => ({
+  ...homework,
+  class: normalizeHomeworkClass(homework.class),
+}))
+
 export default function HomeworkPage() {
   const { toast } = useToast()
-  const { userType, email } = useAuth()
+  const { userType, email, userName } = useAuth()
   const isStudent = userType === "student"
-  const studentEmailToClass: Record<string, string> = {
-    "student@example.com": "1أ",
-    "student2@example.com": "1ب",
-  }
-  const [selectedClass, setSelectedClass] = useState<string>(isStudent ? (studentEmailToClass[email || ""] || "1أ") : "all")
+  const [preferredStudentClass, setPreferredStudentClass] = useState("")
+  const [classOptions, setClassOptions] = useState<string[]>(fallbackHomeworkClasses)
+  const availableClasses = classOptions.length > 0 ? classOptions : fallbackHomeworkClasses
+  const defaultHomeworkClass = availableClasses[0] || ""
+  const [selectedClass, setSelectedClass] = useState<string>(isStudent ? defaultHomeworkClass : "all")
   const [selectedSubject, setSelectedSubject] = useState<string>("all")
   const [searchTerm, setSearchTerm] = useState("")
   const [isFilterOpen, setIsFilterOpen] = useState(false)
@@ -92,137 +249,73 @@ export default function HomeworkPage() {
   const [selectedHomework, setSelectedHomework] = useState<Homework | null>(null)
   const [editedHomework, setEditedHomework] = useState<Homework | null>(null)
 
-  // Dummy data for homework
-  const [homeworks, setHomeworks] = useState<Homework[]>([
-    {
-      id: 1,
-      title: "واجب الوحدة الخامسة",
-      subject: "رياضيات",
-      class: "1أ",
-      dueDate: "2025-05-20",
-      status: "active",
-      description: "حل تمارين الصفحات 45-48 من كتاب الرياضيات",
-      priority: "high",
-      createdAt: "2025-05-15T10:30:00",
-      submissionCount: 15,
-      totalStudents: 25,
-      attachments: ["واجب_الرياضيات.pdf"],
-    },
-    {
-      id: 2,
-      title: "تجربة علمية",
-      subject: "علوم",
-      class: "1أ",
-      dueDate: "2025-05-22",
-      status: "active",
-      description: "كتابة تقرير عن التجربة العلمية التي تم إجراؤها في المختبر",
-      priority: "medium",
-      createdAt: "2025-05-14T11:15:00",
-      submissionCount: 8,
-      totalStudents: 25,
-    },
-    {
-      id: 3,
-      title: "قراءة قصة",
-      subject: "لغة عربية",
-      class: "1أ",
-      dueDate: "2025-05-18",
-      status: "completed",
-      description: "قراءة القصة في الصفحات 30-35 وتلخيصها",
-      priority: "medium",
-      createdAt: "2025-05-10T09:45:00",
-      completedAt: "2025-05-18T14:30:00",
-      submissionCount: 23,
-      totalStudents: 25,
-    },
-    {
-      id: 4,
-      title: "مشروع نهاية الفصل",
-      subject: "اجتماعيات",
-      class: "1أ",
-      dueDate: "2025-05-30",
-      status: "active",
-      description: "إعداد مشروع عن الحضارات القديمة وتقديمه أمام الفصل",
-      priority: "high",
-      createdAt: "2025-05-12T13:20:00",
-      submissionCount: 5,
-      totalStudents: 25,
-      attachments: ["تعليمات_المشروع.pdf", "نموذج_التقييم.docx"],
-    },
-    {
-      id: 5,
-      title: "تمارين الفصل الثالث",
-      subject: "لغة إنجليزية",
-      class: "1ب",
-      dueDate: "2025-05-17",
-      status: "overdue",
-      description: "حل تمارين الفصل الثالث من كتاب اللغة الإنجليزية",
-      priority: "low",
-      createdAt: "2025-05-10T10:00:00",
-      submissionCount: 18,
-      totalStudents: 23,
-    },
-    {
-      id: 6,
-      title: "حفظ سورة الملك",
-      subject: "تربية إسلامية",
-      class: "2أ",
-      dueDate: "2025-05-25",
-      status: "active",
-      description: "حفظ سورة الملك كاملة والاستعداد للتسميع",
-      priority: "high",
-      createdAt: "2025-05-15T08:30:00",
-      submissionCount: 10,
-      totalStudents: 27,
-    },
-    {
-      id: 7,
-      title: "رسم منظر طبيعي",
-      subject: "فنية",
-      class: "2ب",
-      dueDate: "2025-05-19",
-      status: "completed",
-      description: "رسم منظر طبيعي باستخدام الألوان المائية",
-      priority: "medium",
-      createdAt: "2025-05-12T11:30:00",
-      completedAt: "2025-05-19T12:45:00",
-      submissionCount: 22,
-      totalStudents: 24,
-    },
-    {
-      id: 8,
-      title: "بحث عن الطاقة المتجددة",
-      subject: "علوم",
-      class: "3أ",
-      dueDate: "2025-05-28",
-      status: "active",
-      description: "إعداد بحث عن مصادر الطاقة المتجددة وأهميتها للبيئة",
-      priority: "high",
-      createdAt: "2025-05-14T09:15:00",
-      submissionCount: 12,
-      totalStudents: 26,
-      attachments: ["مراجع_البحث.pdf"],
-    },
-  ])
-
-  // New homework template
-  const newHomeworkTemplate: Omit<Homework, "id" | "createdAt" | "status"> = {
-    title: "",
-    subject: "رياضيات",
-    class: "1أ",
-    dueDate: format(addDays(new Date(), 7), "yyyy-MM-dd"),
-    description: "",
-    priority: "medium",
-  }
-
-  const [newHomework, setNewHomework] = useState<Omit<Homework, "id" | "createdAt" | "status">>(newHomeworkTemplate)
+  const [homeworks, setHomeworks] = useState<Homework[]>(initialHomeworks)
+  const [newHomework, setNewHomework] = useState<Omit<Homework, "id" | "createdAt" | "status">>(() =>
+    buildHomeworkTemplate(fallbackHomeworkClasses[0] || ""),
+  )
   const [attachments, setAttachments] = useState<File[]>([])
 
   useEffect(() => {
-    if (isStudent) {
-      setSelectedClass(studentEmailToClass[email || ""] || "1أ")
+    let isActive = true
+
+    void (async () => {
+      try {
+        const [classesResponse, studentsResponse] = await Promise.all([
+          fetchClassesData(),
+          isStudent ? fetchStudentsData().catch(() => ({ students: [] })) : Promise.resolve({ students: [] }),
+        ])
+        if (!isActive) return
+
+        const nextClasses = normalizeHomeworkClasses(
+          Array.isArray(classesResponse.classes) ? classesResponse.classes.map((schoolClass) => schoolClass.name) : [],
+        )
+        const matchedStudent = studentsResponse.students.find(
+          (student) => normalizeLookupText(student.name) === normalizeLookupText(userName || email || ""),
+        )
+        const resolvedStudentClass = normalizeHomeworkClass(matchedStudent?.classroom || "")
+
+        setClassOptions(nextClasses.length > 0 ? nextClasses : fallbackHomeworkClasses)
+        setPreferredStudentClass(resolvedStudentClass)
+      } catch {
+        if (!isActive) return
+        setPreferredStudentClass("")
+        setClassOptions(fallbackHomeworkClasses)
+      }
+    })()
+
+    return () => {
+      isActive = false
     }
-  }, [isStudent, email])
+  }, [email, isStudent, userName])
+
+  useEffect(() => {
+    const resolvedStudentClass =
+      preferredStudentClass && availableClasses.includes(preferredStudentClass) ? preferredStudentClass : defaultHomeworkClass
+
+    if (isStudent && resolvedStudentClass && selectedClass !== resolvedStudentClass) {
+      setSelectedClass(resolvedStudentClass)
+    }
+
+    if (!isStudent && selectedClass !== "all" && selectedClass && !availableClasses.includes(selectedClass)) {
+      setSelectedClass("all")
+    }
+
+    if (defaultHomeworkClass && !availableClasses.includes(newHomework.class)) {
+      setNewHomework((current) => ({ ...current, class: resolvedStudentClass || defaultHomeworkClass }))
+    }
+
+    if (editedHomework && !availableClasses.includes(editedHomework.class)) {
+      setEditedHomework({ ...editedHomework, class: resolvedStudentClass || defaultHomeworkClass })
+    }
+  }, [
+    availableClasses,
+    defaultHomeworkClass,
+    editedHomework,
+    isStudent,
+    newHomework.class,
+    preferredStudentClass,
+    selectedClass,
+  ])
 
   // Check for overdue homework
   useEffect(() => {
@@ -252,7 +345,7 @@ export default function HomeworkPage() {
 
   const handleEditHomework = (homework: Homework) => {
     setSelectedHomework(homework)
-    setEditedHomework({ ...homework })
+    setEditedHomework({ ...homework, class: normalizeHomeworkClass(homework.class) })
     setIsEditDialogOpen(true)
   }
 
@@ -280,7 +373,12 @@ export default function HomeworkPage() {
 
   const saveEditedHomework = () => {
     if (editedHomework) {
-      setHomeworks(homeworks.map((hw) => (hw.id === editedHomework.id ? editedHomework : hw)))
+      const normalizedHomework = {
+        ...editedHomework,
+        class: normalizeHomeworkClass(editedHomework.class),
+      }
+
+      setHomeworks(homeworks.map((hw) => (hw.id === editedHomework.id ? normalizedHomework : hw)))
       toast({
         title: "تم تحديث الواجب",
         description: "تم تحديث الواجب المنزلي بنجاح",
@@ -315,6 +413,7 @@ export default function HomeworkPage() {
     const homeworkToAdd: Homework = {
       id: newId,
       ...newHomework,
+      class: normalizeHomeworkClass(newHomework.class),
       status: "active",
       createdAt: new Date().toISOString(),
       attachments: attachmentNames.length > 0 ? attachmentNames : undefined,
@@ -323,7 +422,7 @@ export default function HomeworkPage() {
     }
 
     setHomeworks([homeworkToAdd, ...homeworks])
-    setNewHomework(newHomeworkTemplate)
+    setNewHomework(buildHomeworkTemplate(defaultHomeworkClass))
     setAttachments([])
     setIsAddDialogOpen(false)
     toast({
@@ -474,12 +573,11 @@ export default function HomeworkPage() {
             </SelectTrigger>
             <SelectContent>
               {!isStudent && <SelectItem value="all">جميع الفصول</SelectItem>}
-              <SelectItem value="1أ">الصف الأول (أ)</SelectItem>
-              <SelectItem value="1ب">الصف الأول (ب)</SelectItem>
-              <SelectItem value="2أ">الصف الثاني (أ)</SelectItem>
-              <SelectItem value="2ب">الصف الثاني (ب)</SelectItem>
-              <SelectItem value="3أ">الصف الثالث (أ)</SelectItem>
-              <SelectItem value="3ب">الصف الثالث (ب)</SelectItem>
+              {availableClasses.map((className) => (
+                <SelectItem key={className} value={className}>
+                  {className}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
@@ -1136,12 +1234,11 @@ export default function HomeworkPage() {
                     <SelectValue placeholder="اختر الفصل" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1أ">الصف الأول (أ)</SelectItem>
-                    <SelectItem value="1ب">الصف الأول (ب)</SelectItem>
-                    <SelectItem value="2أ">الصف الثاني (أ)</SelectItem>
-                    <SelectItem value="2ب">الصف الثاني (ب)</SelectItem>
-                    <SelectItem value="3أ">الصف الثالث (أ)</SelectItem>
-                    <SelectItem value="3ب">الصف الثالث (ب)</SelectItem>
+                    {availableClasses.map((className) => (
+                      <SelectItem key={className} value={className}>
+                        {className}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1286,12 +1383,11 @@ export default function HomeworkPage() {
                       <SelectValue placeholder="اختر الفصل" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1أ">الصف الأول (أ)</SelectItem>
-                      <SelectItem value="1ب">الصف الأول (ب)</SelectItem>
-                      <SelectItem value="2أ">الصف الثاني (أ)</SelectItem>
-                      <SelectItem value="2ب">الصف الثاني (ب)</SelectItem>
-                      <SelectItem value="3أ">الصف الثالث (أ)</SelectItem>
-                      <SelectItem value="3ب">الصف الثالث (ب)</SelectItem>
+                      {availableClasses.map((className) => (
+                        <SelectItem key={className} value={className}>
+                          {className}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

@@ -15,69 +15,20 @@ import { ALL_SUBJECTS, buildReportProfiles, type StudentReportProfile } from "@/
 
 type StudentProfile = StudentReportProfile
 
-const studentProfiles: StudentProfile[] = [
-  {
-    id: "1",
-    name: "سارة أحمد",
-    className: "الصف الأول",
-    term: "الترم الأول",
-    grades: [
-      { subject: "الرياضيات", score: 85 },
-      { subject: "العلوم", score: 92 },
-      { subject: "اللغة العربية", score: 78 },
-    ],
-    attendance: [
-      { date: "2026-02-24", status: "حاضر" },
-      { date: "2026-02-25", status: "حاضر" },
-      { date: "2026-02-26", status: "متأخر" },
-      { date: "2026-02-27", status: "غائب" },
-      { date: "2026-02-28", status: "حاضر" },
-    ],
-  },
-  {
-    id: "2",
-    name: "نورة محمد",
-    className: "الصف الأول",
-    term: "الترم الثاني",
-    grades: [
-      { subject: "الرياضيات", score: 90 },
-      { subject: "العلوم", score: 88 },
-      { subject: "اللغة العربية", score: 95 },
-    ],
-    attendance: [
-      { date: "2026-02-24", status: "حاضر" },
-      { date: "2026-02-25", status: "حاضر" },
-      { date: "2026-02-26", status: "حاضر" },
-      { date: "2026-02-27", status: "حاضر" },
-      { date: "2026-02-28", status: "متأخر" },
-    ],
-  },
-  {
-    id: "3",
-    name: "فاطمة علي",
-    className: "الصف الثاني",
-    term: "الترم الأول",
-    grades: [
-      { subject: "الرياضيات", score: 75 },
-      { subject: "العلوم", score: 82 },
-      { subject: "اللغة العربية", score: 88 },
-    ],
-    attendance: [
-      { date: "2026-02-24", status: "حاضر" },
-      { date: "2026-02-25", status: "غائب" },
-      { date: "2026-02-26", status: "حاضر" },
-      { date: "2026-02-27", status: "متأخر" },
-      { date: "2026-02-28", status: "حاضر" },
-    ],
-  },
-]
-
-const studentEmailToName: Record<string, string> = {
-  "student@example.com": "سارة أحمد",
-  "student2@example.com": "نورة محمد",
-}
-
 const normalizeText = (value: string) => value.replace(/\s+/g, " ").trim()
+
+const buildEmptyProfile = (
+  name: string,
+  term: "الترم الأول" | "الترم الثاني",
+  fallbackId: string,
+): StudentProfile => ({
+  id: fallbackId,
+  name,
+  className: "",
+  term,
+  grades: [],
+  attendance: [],
+})
 
 function getStatusVariant(status: "حاضر" | "غائب" | "متأخر"): "default" | "destructive" | "outline" {
   if (status === "غائب") return "destructive"
@@ -94,10 +45,19 @@ export default function ReportsPage() {
   const [selectedTerm, setSelectedTerm] = useState<"الترم الأول" | "الترم الثاني">("الترم الأول")
   const [selectedStudentId, setSelectedStudentId] = useState("")
   const [studentSearchQuery, setStudentSearchQuery] = useState("")
-  const [reportProfiles, setReportProfiles] = useState<StudentProfile[]>(studentProfiles)
+  const [reportProfiles, setReportProfiles] = useState<StudentProfile[]>([])
 
-  const inferredStudentName = (email && studentEmailToName[email]) || userName || ""
+  const inferredStudentName = userName || email || ""
   const normalizedAccountStudentName = normalizeText(inferredStudentName)
+  const emptyProfile = useMemo(
+    () =>
+      buildEmptyProfile(
+        inferredStudentName || "لا توجد بيانات",
+        selectedTerm,
+        email || `empty-profile-${normalizeText(inferredStudentName) || "student"}`,
+      ),
+    [email, inferredStudentName, selectedTerm],
+  )
 
   useEffect(() => {
     let isActive = true
@@ -117,17 +77,20 @@ export default function ReportsPage() {
           setReportProfiles(builtProfiles)
           return
         }
+
+        setReportProfiles([])
+        return
       } catch (error) {
         if (!isActive) return
         toast({
           title: "تعذر تحميل التقارير",
-          description: error instanceof Error ? error.message : "تم استخدام البيانات الحالية مؤقتًا",
+          description: error instanceof Error ? error.message : "تعذر تحميل بيانات التقارير من الخادم",
           variant: "destructive",
         })
       }
 
       if (isActive) {
-        setReportProfiles(studentProfiles)
+        setReportProfiles([])
       }
     })()
 
@@ -142,24 +105,16 @@ export default function ReportsPage() {
   }, [isStudent, normalizedAccountStudentName, reportProfiles])
 
   const defaultStudent = useMemo(() => {
-    const fallbackName = inferredStudentName || "حساب الطالبة"
-
     if (isStudent) {
       return (
         accountStudentProfiles.find((student) => student.term === selectedTerm) ||
-        accountStudentProfiles[0] || {
-          id: email || `current-student-${normalizeText(fallbackName) || "student"}`,
-          name: fallbackName,
-          className: "الصف الأول",
-          term: selectedTerm,
-          grades: [],
-          attendance: [],
-        }
+        accountStudentProfiles[0] ||
+        emptyProfile
       )
     }
 
-    return reportProfiles.find((student) => student.term === selectedTerm) || reportProfiles[0]
-  }, [accountStudentProfiles, email, inferredStudentName, isStudent, reportProfiles, selectedTerm])
+    return reportProfiles.find((student) => student.term === selectedTerm) || reportProfiles[0] || emptyProfile
+  }, [accountStudentProfiles, emptyProfile, isStudent, reportProfiles, selectedTerm])
 
   const visibleStudents = useMemo(() => {
     const byTerm = reportProfiles.filter((s) => s.term === selectedTerm)
@@ -199,6 +154,8 @@ export default function ReportsPage() {
     const selectedInTerm = reportProfiles.find((s) => s.id === selectedStudentId && s.term === selectedTerm)
     return selectedInTerm || allSelectableStudents.find((s) => s.id === selectedStudentId) || defaultStudent
   }, [isStudent, selectedStudentId, visibleStudents, selectedTerm, allSelectableStudents, defaultStudent, reportProfiles])
+
+  const hasReportData = reportProfiles.length > 0
 
   const searchedStudents = useMemo(() => {
     const query = normalizeText(studentSearchQuery)
@@ -451,6 +408,14 @@ export default function ReportsPage() {
           )}
         </CardContent>
       </Card>
+
+      {!hasReportData && (
+        <Card>
+          <CardContent className="py-10 text-center text-muted-foreground">
+            لا توجد بيانات تقارير لطالبات حاليًا.
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>

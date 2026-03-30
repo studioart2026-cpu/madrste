@@ -60,7 +60,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { fetchTeachersData, saveTeachersData } from "@/lib/school-api"
-import { teacherDirectory } from "@/lib/teachers-directory"
 
 // نموذج بيانات المعلمة
 interface Teacher {
@@ -86,8 +85,29 @@ interface Teacher {
   subjects?: string[]
 }
 
-// بيانات تجريبية للمعلمات
-const initialTeachers: Teacher[] = teacherDirectory
+const normalizeArabicDigits = (value: string) =>
+  value.replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit))).replace(/[۰-۹]/g, (digit) =>
+    String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)),
+  )
+
+const normalizeBirthDate = (value: string) => {
+  const normalizedValue = normalizeArabicDigits(value).trim().replace(/[./]/g, "-").replace(/\s+/g, "")
+  if (!normalizedValue) return ""
+
+  const isoMatch = normalizedValue.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`
+  }
+
+  const localeMatch = normalizedValue.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/)
+  if (localeMatch) {
+    const [, month, day, year] = localeMatch
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`
+  }
+
+  return normalizedValue
+}
 
 // قائمة التخصصات
 const specializations = [
@@ -142,7 +162,7 @@ const subjects = [
 
 export default function TeachersPage() {
   const { toast } = useToast()
-  const [teachers, setTeachers] = useState<Teacher[]>(initialTeachers)
+  const [teachers, setTeachers] = useState<Teacher[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [filterSpecialization, setFilterSpecialization] = useState<string>("")
   const [filterDepartment, setFilterDepartment] = useState<string>("")
@@ -166,8 +186,7 @@ export default function TeachersPage() {
   const [currentTeacher, setCurrentTeacher] = useState<Teacher | null>(null)
   const [isSaving, setIsSaving] = useState(false)
 
-  // نموذج إضافة معلمة جديدة
-  const [newTeacher, setNewTeacher] = useState<Omit<Teacher, "id">>({
+  const createEmptyTeacherDraft = (): Omit<Teacher, "id"> => ({
     name: "",
     teacherId: "",
     specialization: "",
@@ -176,18 +195,21 @@ export default function TeachersPage() {
     status: "نشط",
     birthDate: "",
     address: "",
-    attendance: 100,
-    performance: 90,
+    attendance: undefined,
+    performance: undefined,
     classes: [],
     subjects: [],
   })
+
+  // نموذج إضافة معلمة جديدة
+  const [newTeacher, setNewTeacher] = useState<Omit<Teacher, "id">>(createEmptyTeacherDraft)
 
   const loadTeachers = async (showSuccessToast = false) => {
     setIsLoading(true)
 
     try {
       const response = await fetchTeachersData()
-      const nextTeachers = Array.isArray(response.teachers) && response.teachers.length > 0 ? response.teachers : initialTeachers
+      const nextTeachers = Array.isArray(response.teachers) ? response.teachers : []
       setTeachers(nextTeachers)
 
       if (showSuccessToast) {
@@ -197,15 +219,12 @@ export default function TeachersPage() {
         })
       }
     } catch (error) {
-      setTeachers(initialTeachers)
-
-      if (showSuccessToast) {
-        toast({
-          title: "تعذر تحديث البيانات",
-          description: error instanceof Error ? error.message : "حدث خطأ أثناء تحميل بيانات المعلمات",
-          variant: "destructive",
-        })
-      }
+      setTeachers([])
+      toast({
+        title: "تعذر تحميل بيانات المعلمات",
+        description: error instanceof Error ? error.message : "حدث خطأ أثناء تحميل بيانات المعلمات من الخادم",
+        variant: "destructive",
+      })
     } finally {
       setIsLoading(false)
     }
@@ -296,9 +315,10 @@ export default function TeachersPage() {
     const newId = (maxId + 1).toString()
     const teacherWithId = {
       ...newTeacher,
+      birthDate: normalizeBirthDate(newTeacher.birthDate),
       id: newId,
       joinDate: new Date().toISOString().split("T")[0],
-      lastLogin: new Date().toISOString().split("T")[0],
+      lastLogin: "",
     }
 
     const saved = await persistTeachers([...teachers, teacherWithId])
@@ -314,40 +334,9 @@ export default function TeachersPage() {
     })
 
     // إعادة تعيين نموذج الإضافة
-    setNewTeacher({
-      name: "",
-      teacherId: "",
-      specialization: "",
-      department: "",
-      phone: "",
-      status: "نشط",
-      birthDate: "",
-      address: "",
-      attendance: 100,
-      performance: 90,
-      classes: [],
-      subjects: [],
-    })
+    setNewTeacher(createEmptyTeacherDraft())
   }
 
-  // تعديل بيانات معلمة
-  const handleEditTeacher = async () => {
-    if (!currentTeacher) return
-
-    const saved = await persistTeachers(teachers.map((teacher) => (teacher.id === currentTeacher.id ? currentTeacher : teacher)))
-    if (!saved) {
-      return
-    }
-
-    setEditDialogOpen(false)
-    toast({
-      title: "تم التعديل بنجاح",
-      description: `تم تعديل بيانات المعلمة ${currentTeacher.name} بنجاح`,
-      variant: "default",
-    })
-  }
-
-  // حذف معلمة
   const handleDeleteTeacher = async () => {
     if (!currentTeacher) return
 
@@ -361,6 +350,31 @@ export default function TeachersPage() {
       title: "تم الحذف بنجاح",
       description: `تم حذف المعلمة ${currentTeacher.name} بنجاح`,
       variant: "destructive",
+    })
+  }
+
+  // تعديل بيانات معلمة
+  const handleEditTeacher = async () => {
+    if (!currentTeacher) return
+
+    const normalizedTeacher = {
+      ...currentTeacher,
+      birthDate: normalizeBirthDate(currentTeacher.birthDate),
+    }
+
+    const saved = await persistTeachers(
+      teachers.map((teacher) => (teacher.id === normalizedTeacher.id ? normalizedTeacher : teacher)),
+    )
+    if (!saved) {
+      return
+    }
+
+    setCurrentTeacher(normalizedTeacher)
+    setEditDialogOpen(false)
+    toast({
+      title: "تم التعديل بنجاح",
+      description: `تم تعديل بيانات المعلمة ${normalizedTeacher.name} بنجاح`,
+      variant: "default",
     })
   }
 
@@ -411,6 +425,7 @@ export default function TeachersPage() {
     if (selectedTeachers.length === 0) return
 
     let updatedTeachers = [...teachers]
+    const nextStatus: Teacher["status"] = action === "activate" ? "نشط" : "غير نشط"
     let actionMessage = ""
 
     if (action === "delete") {
@@ -421,11 +436,12 @@ export default function TeachersPage() {
         if (selectedTeachers.includes(teacher.id)) {
           return {
             ...teacher,
-            status: action === "activate" ? "نشط" : "غير نشط",
+            status: nextStatus,
           }
         }
         return teacher
       })
+
       actionMessage =
         action === "activate" ? "تم تنشيط المعلمات المحددة بنجاح" : "تم إلغاء تنشيط المعلمات المحددة بنجاح"
     }
@@ -514,7 +530,7 @@ export default function TeachersPage() {
         >
           <div>
             <h1 className="text-3xl font-bold">إدارة المعلمات</h1>
-            <p className="text-gray-500 mt-1">إضافة وتعديل وحذف بيانات المعلمات</p>
+            <p className="text-gray-500 mt-1">إضافة وتعديل بيانات المعلمات</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -967,14 +983,15 @@ export default function TeachersPage() {
                                     </Button>
                                     <Button
                                       variant="ghost"
-                                      size="icon"
+                                      size="sm"
+                                      className="text-red-600 hover:bg-red-50 hover:text-red-700"
                                       onClick={() => {
                                         setCurrentTeacher(teacher)
                                         setDeleteDialogOpen(true)
                                       }}
                                     >
                                       <Trash2 className="h-4 w-4" />
-                                      <span className="sr-only">حذف</span>
+                                      <span className="mr-1">حذف</span>
                                     </Button>
                                     <Button
                                       variant="ghost"
@@ -1103,13 +1120,15 @@ export default function TeachersPage() {
                                   </Button>
                                   <Button
                                     variant="ghost"
-                                    size="icon"
+                                    size="sm"
+                                    className="text-red-600 hover:bg-red-50 hover:text-red-700"
                                     onClick={() => {
                                       setCurrentTeacher(teacher)
                                       setDeleteDialogOpen(true)
                                     }}
                                   >
                                     <Trash2 className="h-4 w-4" />
+                                    <span className="mr-1">حذف</span>
                                   </Button>
                                   <Button
                                     variant="ghost"
@@ -1487,9 +1506,12 @@ export default function TeachersPage() {
                 <Label htmlFor="birthDate">تاريخ الميلاد</Label>
                 <Input
                   id="birthDate"
-                  type="date"
+                  type="text"
                   value={newTeacher.birthDate}
                   onChange={(e) => setNewTeacher({ ...newTeacher, birthDate: e.target.value })}
+                  onBlur={(e) => setNewTeacher({ ...newTeacher, birthDate: normalizeBirthDate(e.target.value) })}
+                  placeholder="YYYY-MM-DD أو MM/DD/YYYY"
+                  inputMode="numeric"
                   dir="ltr"
                 />
               </div>
@@ -1628,9 +1650,12 @@ export default function TeachersPage() {
                   <Label htmlFor="edit-birthDate">تاريخ الميلاد</Label>
                   <Input
                     id="edit-birthDate"
-                    type="date"
+                    type="text"
                     value={currentTeacher.birthDate}
                     onChange={(e) => setCurrentTeacher({ ...currentTeacher, birthDate: e.target.value })}
+                    onBlur={(e) => setCurrentTeacher({ ...currentTeacher, birthDate: normalizeBirthDate(e.target.value) })}
+                    placeholder="YYYY-MM-DD أو MM/DD/YYYY"
+                    inputMode="numeric"
                     dir="ltr"
                   />
                 </div>
@@ -1648,6 +1673,18 @@ export default function TeachersPage() {
           )}
 
           <DialogFooter>
+            {currentTeacher && (
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  setEditDialogOpen(false)
+                  setDeleteDialogOpen(true)
+                }}
+                disabled={isSaving}
+              >
+                حذف المعلمة
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
               إلغاء
             </Button>
@@ -1658,7 +1695,6 @@ export default function TeachersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* مربع حوار حذف معلمة */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1669,7 +1705,10 @@ export default function TeachersPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void handleDeleteTeacher()} className="bg-destructive text-destructive-foreground">
+            <AlertDialogAction
+              onClick={() => void handleDeleteTeacher()}
+              className="bg-destructive text-destructive-foreground"
+            >
               حذف
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -1858,7 +1897,6 @@ export default function TeachersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* مربع حوار الإجراءات الجماعية */}
       <AlertDialog open={bulkActionDialogOpen} onOpenChange={setBulkActionDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1878,6 +1916,7 @@ export default function TeachersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
     </div>
   )
 }

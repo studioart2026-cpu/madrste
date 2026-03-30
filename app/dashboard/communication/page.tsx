@@ -95,128 +95,7 @@ interface SentMessageType {
   deliveryRate: number
 }
 
-// بيانات تجريبية للطالبات وأولياء الأمور
-const initialStudents: StudentType[] = [
-  {
-    id: "1",
-    name: "سارة أحمد",
-    studentId: "10001",
-    grade: "الصف الأول",
-    classroom: "١/١",
-    parents: [
-      {
-        id: "p1",
-        name: "أحمد محمد",
-        phone: "0501234567",
-        email: "ahmed@example.com",
-        relation: "أب",
-        preferredContact: "واتساب",
-        lastContacted: "2023-05-10",
-        responseRate: 90,
-      },
-      {
-        id: "p2",
-        name: "منى علي",
-        phone: "0509876543",
-        relation: "أم",
-        preferredContact: "هاتف",
-        lastContacted: "2023-05-12",
-        responseRate: 95,
-      },
-    ],
-  },
-  {
-    id: "2",
-    name: "نورة محمد",
-    studentId: "10002",
-    grade: "الصف الثاني",
-    classroom: "٢/٣",
-    parents: [
-      {
-        id: "p3",
-        name: "محمد خالد",
-        phone: "0507654321",
-        email: "mohammed@example.com",
-        relation: "أب",
-        preferredContact: "بريد إلكتروني",
-        lastContacted: "2023-05-05",
-        responseRate: 80,
-      },
-    ],
-  },
-  {
-    id: "3",
-    name: "هند خالد",
-    studentId: "10003",
-    grade: "الصف الثالث",
-    classroom: "٣/٢",
-    parents: [
-      {
-        id: "p4",
-        name: "خالد عبدالله",
-        phone: "0551234567",
-        relation: "أب",
-        preferredContact: "واتساب",
-        lastContacted: "2023-05-15",
-        responseRate: 100,
-      },
-      {
-        id: "p5",
-        name: "عائشة محمد",
-        phone: "0552345678",
-        email: "aisha@example.com",
-        relation: "أم",
-        preferredContact: "واتساب",
-        lastContacted: "2023-05-14",
-        responseRate: 85,
-      },
-    ],
-  },
-  {
-    id: "4",
-    name: "ريم سعد",
-    studentId: "10004",
-    grade: "الصف الأول",
-    classroom: "١/٢",
-    parents: [
-      {
-        id: "p6",
-        name: "سعد فهد",
-        phone: "0561234567",
-        relation: "أب",
-        preferredContact: "هاتف",
-      },
-    ],
-  },
-  {
-    id: "5",
-    name: "لمى عبدالله",
-    studentId: "10005",
-    grade: "الصف الثاني",
-    classroom: "٢/١",
-    parents: [
-      {
-        id: "p7",
-        name: "عبدالله سعيد",
-        phone: "0571234567",
-        email: "abdullah@example.com",
-        relation: "أب",
-        preferredContact: "بريد إلكتروني",
-        lastContacted: "2023-05-01",
-        responseRate: 75,
-      },
-      {
-        id: "p8",
-        name: "نوف محمد",
-        phone: "0572345678",
-        relation: "أم",
-        preferredContact: "واتساب",
-        lastContacted: "2023-05-08",
-        responseRate: 90,
-      },
-    ],
-  },
-]
+const initialStudents: StudentType[] = []
 
 // قوالب الرسائل التجريبية
 const initialMessageTemplates: MessageTemplateType[] = [
@@ -263,112 +142,20 @@ const initialMessageTemplates: MessageTemplateType[] = [
 ]
 
 // سجل الرسائل المرسلة
-const initialSentMessages: SentMessageType[] = [
-  {
-    id: "m1",
-    templateId: "t1",
-    title: "دعوة لاجتماع أولياء الأمور",
-    content:
-      "السلام عليكم ورحمة الله وبركاته\nندعوكم لحضور اجتماع أولياء الأمور يوم الخميس 20/5/2023 الساعة 10:00 صباحاً في قاعة الاجتماعات بالمدرسة.\nنأمل حضوركم لمناقشة مستوى الطالبات وسير العملية التعليمية.\nمع خالص الشكر والتقدير",
-    recipients: ["0501234567", "0509876543", "0507654321", "0551234567"],
-    sentAt: "2023-05-15T10:30:00",
-    status: "نجاح",
-    deliveryRate: 100,
-  },
-  {
-    id: "m2",
-    templateId: "t2",
-    title: "إشعار بموعد الاختبارات",
-    content:
-      "السلام عليكم ورحمة الله وبركاته\nنود إشعاركم بأن اختبارات الفصل الدراسي ستبدأ يوم الأحد 10/6/2023.\nنرجو التأكد من استعداد الطالبات وحضورهن في الموعد المحدد.\nمع تمنياتنا للجميع بالتوفيق والنجاح",
-    recipients: ["0501234567", "0507654321", "0551234567", "0552345678", "0561234567", "0571234567", "0572345678"],
-    sentAt: "2023-05-10T09:15:00",
-    status: "جزئي",
-    deliveryRate: 85,
-  },
-  {
-    id: "m3",
-    templateId: "t4",
-    title: "إشعار بغياب الطالبة",
-    content:
-      "السلام عليكم ورحمة الله وبركاته\nنود إشعاركم بغياب الطالبة ريم سعد اليوم عن المدرسة.\nنرجو التواصل مع إدارة المدرسة لتوضيح سبب الغياب.\nمع خالص الشكر",
-    recipients: ["0561234567"],
-    sentAt: "2023-05-08T08:45:00",
-    status: "نجاح",
-    deliveryRate: 100,
-  },
-]
+const initialSentMessages: SentMessageType[] = []
 
 // فئات الرسائل
 const messageCategories = ["اجتماعات", "اختبارات", "واجبات", "غياب", "أنشطة", "سلوك", "إنجازات", "عام"]
 
 // Mock data for parents
-const mockParents = [
-  {
-    id: 1,
-    studentName: "سارة أحمد",
-    parentName: "أحمد محمد",
-    phone: "966501234567",
-    lastContact: "2023-05-10",
-    class: "الصف الثالث أ",
-  },
-  {
-    id: 2,
-    studentName: "نورة خالد",
-    parentName: "خالد إبراهيم",
-    phone: "966502345678",
-    lastContact: "2023-05-08",
-    class: "الصف الثالث أ",
-  },
-  {
-    id: 3,
-    studentName: "هند سعيد",
-    parentName: "سعيد عبدالله",
-    phone: "966503456789",
-    lastContact: "2023-05-05",
-    class: "الصف الثالث ب",
-  },
-  {
-    id: 4,
-    studentName: "ريم فهد",
-    parentName: "فهد سلطان",
-    phone: "966504567890",
-    lastContact: "2023-05-03",
-    class: "الصف الثالث ب",
-  },
-  {
-    id: 5,
-    studentName: "منى عبدالرحمن",
-    parentName: "عبدالرحمن ناصر",
-    phone: "966505678901",
-    lastContact: "2023-05-01",
-    class: "الصف الرابع أ",
-  },
-  {
-    id: 6,
-    studentName: "لمى سلمان",
-    parentName: "سلمان عبدالعزيز",
-    phone: "966506789012",
-    lastContact: "2023-04-28",
-    class: "الصف الرابع أ",
-  },
-  {
-    id: 7,
-    studentName: "دانة محمد",
-    parentName: "محمد عبدالله",
-    phone: "966507890123",
-    lastContact: "2023-04-25",
-    class: "الصف الرابع ب",
-  },
-  {
-    id: 8,
-    studentName: "جواهر سعد",
-    parentName: "سعد فيصل",
-    phone: "966508901234",
-    lastContact: "2023-04-22",
-    class: "الصف الرابع ب",
-  },
-]
+const mockParents: Array<{
+  id: number
+  studentName: string
+  parentName: string
+  phone: string
+  lastContact: string
+  class: string
+}> = []
 
 // Mock message templates
 const messageTemplates = [
@@ -398,24 +185,13 @@ const messageTemplates = [
 ]
 
 // Mock message history
-const initialMessageHistory = [
-  {
-    id: 1,
-    recipients: ["أحمد محمد", "خالد إبراهيم"],
-    content:
-      "السلام عليكم ورحمة الله وبركاته\nندعوكم لحضور اجتماع أولياء الأمور يوم الخميس القادم الساعة 6 مساءً في قاعة الاجتماعات بالمدرسة.\nمع تحيات إدارة المدرسة",
-    date: "2023-05-10",
-    type: "جماعية",
-  },
-  {
-    id: 2,
-    recipients: ["سعيد عبدالله"],
-    content:
-      "السلام عليكم ورحمة الله وبركاته\nنود إشعاركم بغياب الطالبة هند عن الدوام المدرسي ليوم الأربعاء 8 مايو.\nنرجو التكرم بتوضيح سبب الغياب.\nمع تحيات إدارة المدرسة",
-    date: "2023-05-08",
-    type: "فردية",
-  },
-]
+const initialMessageHistory: Array<{
+  id: number
+  recipients: string[]
+  content: string
+  date: string
+  type: string
+}> = []
 
 // WhatsApp icon component
 const WhatsappIconComponent = (props: React.SVGProps<SVGSVGElement>) => (

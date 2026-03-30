@@ -73,6 +73,59 @@ export const defaultDashboardContent: DashboardContent = {
   teacherPerformance,
 }
 
+const emptyExecutiveMetric: ExecutiveMetric = { id: "", title: "", value: "", note: "" }
+const emptySmartAlert: SmartAlert = { id: "", title: "", description: "", severity: "منخفض", audience: ["admin"] }
+const emptyInterventionPlan: InterventionPlan = {
+  id: "",
+  studentName: "",
+  subject: "",
+  owner: "",
+  dueDate: "",
+  status: "قيد التنفيذ",
+  actions: [],
+}
+const emptyBehaviorEntry: BehaviorEntry = { id: "", studentName: "", type: "ملاحظة", note: "", date: "" }
+const emptyDocumentEntry: DocumentEntry = { id: "", title: "", studentName: "", category: "", updatedAt: "" }
+const emptyParentMessage: ParentMessageEntry = {
+  id: "",
+  parentName: "",
+  studentName: "",
+  subject: "",
+  status: "جديد",
+  lastUpdate: "",
+}
+const emptyAppointment: AppointmentEntry = { id: "", title: "", owner: "", date: "", status: "مؤكد" }
+const emptyInternalTask: InternalTaskEntry = {
+  id: "",
+  title: "",
+  owner: "",
+  dueDate: "",
+  priority: "متوسطة",
+  status: "جديد",
+}
+const emptyTeacherPerformance: TeacherPerformanceEntry = {
+  id: "",
+  name: "",
+  attendance: 0,
+  gradeCompletion: 0,
+  responseTime: "",
+  weeklyLoad: "",
+}
+const emptyUnifiedStudentRecord: StudentUnifiedRecord = {
+  name: "",
+  className: "",
+  guardian: "",
+  attendanceRate: 0,
+  averageGrade: 0,
+  behaviorScore: 0,
+  riskLevel: "منخفض",
+  strengths: [],
+  supportNeeds: [],
+}
+const emptyMonthlyAnalyticsEntry: MonthlyAnalyticsEntry = { label: "", lowPerformance: 0, improvedStudents: 0 }
+
+const pickFallback = <T,>(values: T[], index: number, emptyValue: T) => values[index] || values[0] || emptyValue
+
 const normalizeString = (value: unknown, fallback: string) =>
   typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback
 
@@ -82,7 +135,7 @@ const normalizeStringArray = (values: unknown, fallback: string[]) =>
 const normalizeExecutiveMetrics = (values: unknown) =>
   Array.isArray(values)
     ? values.map((entry, index) => {
-        const fallback = executiveMetrics[index] || executiveMetrics[0]
+        const fallback = pickFallback(executiveMetrics, index, emptyExecutiveMetric)
         const item = (entry || {}) as Partial<ExecutiveMetric>
         return {
           id: normalizeString(item.id, fallback.id),
@@ -96,7 +149,7 @@ const normalizeExecutiveMetrics = (values: unknown) =>
 const normalizeSmartAlerts = (values: unknown) =>
   Array.isArray(values)
     ? values.map((entry, index) => {
-        const fallback = smartAlerts[index] || smartAlerts[0]
+        const fallback = pickFallback(smartAlerts, index, emptySmartAlert)
         const item = (entry || {}) as Partial<SmartAlert>
         return {
           id: normalizeString(item.id, fallback.id),
@@ -118,7 +171,7 @@ const normalizeSmartAlerts = (values: unknown) =>
 const normalizeInterventionPlans = (values: unknown) =>
   Array.isArray(values)
     ? values.map((entry, index) => {
-        const fallback = interventionPlans[index] || interventionPlans[0]
+        const fallback = pickFallback(interventionPlans, index, emptyInterventionPlan)
         const item = (entry || {}) as Partial<InterventionPlan>
         return {
           id: normalizeString(item.id, fallback.id),
@@ -141,9 +194,9 @@ const normalizeUnifiedStudentRecord = (value: unknown) => {
     name: normalizeString(item.name, unifiedStudentRecord.name),
     className: normalizeString(item.className, unifiedStudentRecord.className),
     guardian: normalizeString(item.guardian, unifiedStudentRecord.guardian),
-    attendanceRate: Number(item.attendanceRate) || unifiedStudentRecord.attendanceRate,
-    averageGrade: Number(item.averageGrade) || unifiedStudentRecord.averageGrade,
-    behaviorScore: Number(item.behaviorScore) || unifiedStudentRecord.behaviorScore,
+    attendanceRate: Number.isFinite(Number(item.attendanceRate)) ? Number(item.attendanceRate) : unifiedStudentRecord.attendanceRate,
+    averageGrade: Number.isFinite(Number(item.averageGrade)) ? Number(item.averageGrade) : unifiedStudentRecord.averageGrade,
+    behaviorScore: Number.isFinite(Number(item.behaviorScore)) ? Number(item.behaviorScore) : unifiedStudentRecord.behaviorScore,
     riskLevel:
       item.riskLevel === "منخفض" || item.riskLevel === "متوسط" || item.riskLevel === "مرتفع"
         ? item.riskLevel
@@ -156,7 +209,7 @@ const normalizeUnifiedStudentRecord = (value: unknown) => {
 const normalizeBehaviorEntries = (values: unknown) =>
   Array.isArray(values)
     ? values.map((entry, index) => {
-        const fallback = behaviorEntries[index] || behaviorEntries[0]
+        const fallback = pickFallback(behaviorEntries, index, emptyBehaviorEntry)
         const item = (entry || {}) as Partial<BehaviorEntry>
         return {
           id: normalizeString(item.id, fallback.id),
@@ -172,7 +225,7 @@ const normalizeBehaviorEntries = (values: unknown) =>
 const normalizeArchivedDocuments = (values: unknown) =>
   Array.isArray(values)
     ? values.map((entry, index) => {
-        const fallback = archivedDocuments[index] || archivedDocuments[0]
+        const fallback = pickFallback(archivedDocuments, index, emptyDocumentEntry)
         const item = (entry || {}) as Partial<DocumentEntry>
         return {
           id: normalizeString(item.id, fallback.id),
@@ -187,7 +240,7 @@ const normalizeArchivedDocuments = (values: unknown) =>
 const normalizeParentMessages = (values: unknown) =>
   Array.isArray(values)
     ? values.map((entry, index) => {
-        const fallback = parentMessages[index] || parentMessages[0]
+        const fallback = pickFallback(parentMessages, index, emptyParentMessage)
         const item = (entry || {}) as Partial<ParentMessageEntry>
         return {
           id: normalizeString(item.id, fallback.id),
@@ -206,7 +259,7 @@ const normalizeParentMessages = (values: unknown) =>
 const normalizeAppointments = (values: unknown) =>
   Array.isArray(values)
     ? values.map((entry, index) => {
-        const fallback = appointments[index] || appointments[0]
+        const fallback = pickFallback(appointments, index, emptyAppointment)
         const item = (entry || {}) as Partial<AppointmentEntry>
         return {
           id: normalizeString(item.id, fallback.id),
@@ -224,7 +277,7 @@ const normalizeAppointments = (values: unknown) =>
 const normalizeInternalTasks = (values: unknown) =>
   Array.isArray(values)
     ? values.map((entry, index) => {
-        const fallback = internalTasks[index] || internalTasks[0]
+        const fallback = pickFallback(internalTasks, index, emptyInternalTask)
         const item = (entry || {}) as Partial<InternalTaskEntry>
         return {
           id: normalizeString(item.id, fallback.id),
@@ -246,12 +299,14 @@ const normalizeInternalTasks = (values: unknown) =>
 const normalizeMonthlyAnalytics = (values: unknown) =>
   Array.isArray(values)
     ? values.map((entry, index) => {
-        const fallback = monthlyAnalytics[index] || monthlyAnalytics[0]
+        const fallback = pickFallback(monthlyAnalytics, index, emptyMonthlyAnalyticsEntry)
         const item = (entry || {}) as Partial<MonthlyAnalyticsEntry>
         return {
           label: normalizeString(item.label, fallback.label),
-          lowPerformance: Number(item.lowPerformance) || fallback.lowPerformance,
-          improvedStudents: Number(item.improvedStudents) || fallback.improvedStudents,
+          lowPerformance: Number.isFinite(Number(item.lowPerformance)) ? Number(item.lowPerformance) : fallback.lowPerformance,
+          improvedStudents: Number.isFinite(Number(item.improvedStudents))
+            ? Number(item.improvedStudents)
+            : fallback.improvedStudents,
         } satisfies MonthlyAnalyticsEntry
       })
     : monthlyAnalytics
@@ -259,13 +314,15 @@ const normalizeMonthlyAnalytics = (values: unknown) =>
 const normalizeTeacherPerformance = (values: unknown) =>
   Array.isArray(values)
     ? values.map((entry, index) => {
-        const fallback = teacherPerformance[index] || teacherPerformance[0]
+        const fallback = pickFallback(teacherPerformance, index, emptyTeacherPerformance)
         const item = (entry || {}) as Partial<TeacherPerformanceEntry>
         return {
           id: normalizeString(item.id, fallback.id),
           name: normalizeString(item.name, fallback.name),
-          attendance: Number(item.attendance) || fallback.attendance,
-          gradeCompletion: Number(item.gradeCompletion) || fallback.gradeCompletion,
+          attendance: Number.isFinite(Number(item.attendance)) ? Number(item.attendance) : fallback.attendance,
+          gradeCompletion: Number.isFinite(Number(item.gradeCompletion))
+            ? Number(item.gradeCompletion)
+            : fallback.gradeCompletion,
           responseTime: normalizeString(item.responseTime, fallback.responseTime),
           weeklyLoad: normalizeString(item.weeklyLoad, fallback.weeklyLoad),
         } satisfies TeacherPerformanceEntry
@@ -280,7 +337,7 @@ export const normalizeDashboardContent = (input?: Partial<DashboardContent>): Da
   executiveMetrics: normalizeExecutiveMetrics(input?.executiveMetrics),
   smartAlerts: normalizeSmartAlerts(input?.smartAlerts),
   interventionPlans: normalizeInterventionPlans(input?.interventionPlans),
-  unifiedStudentRecord: normalizeUnifiedStudentRecord(input?.unifiedStudentRecord),
+  unifiedStudentRecord: normalizeUnifiedStudentRecord(input?.unifiedStudentRecord || emptyUnifiedStudentRecord),
   behaviorEntries: normalizeBehaviorEntries(input?.behaviorEntries),
   archivedDocuments: normalizeArchivedDocuments(input?.archivedDocuments),
   parentMessages: normalizeParentMessages(input?.parentMessages),

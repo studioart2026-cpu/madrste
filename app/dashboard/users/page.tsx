@@ -20,6 +20,7 @@ import { PlusCircle, Search, MoreHorizontal, Trash, Pencil } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/components/ui/use-toast"
 import type { AdminManagedUser, ManagedUserStatus, UserType } from "@/lib/auth-types"
+import { useAuth } from "@/components/auth-provider"
 
 type User = AdminManagedUser
 
@@ -38,12 +39,15 @@ const statusLabels: Record<ManagedUserStatus, string> = {
 }
 
 export default function UsersPage() {
+  const { userType } = useAuth()
   const { toast } = useToast()
   const [users, setUsers] = useState<User[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [editPassword, setEditPassword] = useState("")
+  const [confirmEditPassword, setConfirmEditPassword] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [newUser, setNewUser] = useState({
@@ -163,6 +167,24 @@ export default function UsersPage() {
   const handleEditUser = async () => {
     if (!editingUser) return
 
+    if (editPassword && editPassword.length < 8) {
+      toast({
+        title: "بيانات غير صالحة",
+        description: "كلمة المرور يجب أن تكون 8 أحرف على الأقل",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (editPassword !== confirmEditPassword) {
+      toast({
+        title: "بيانات غير صالحة",
+        description: "تأكيد كلمة المرور غير مطابق",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsSaving(true)
 
     try {
@@ -178,6 +200,7 @@ export default function UsersPage() {
           role: editingUser.role,
           status: editingUser.status,
           phoneNumber: editingUser.phoneNumber || "",
+          password: editPassword.trim(),
         }),
       })
 
@@ -194,6 +217,8 @@ export default function UsersPage() {
       )
       setIsEditDialogOpen(false)
       setEditingUser(null)
+      setEditPassword("")
+      setConfirmEditPassword("")
       toast({
         title: "تم تحديث المستخدم",
         description: `تم تحديث ${updatedUser.name} بنجاح`,
@@ -209,9 +234,25 @@ export default function UsersPage() {
     }
   }
 
+  const openEditDialog = (user: User) => {
+    setEditingUser(user)
+    setEditPassword("")
+    setConfirmEditPassword("")
+    setIsEditDialogOpen(true)
+  }
+
   const handleDeleteUser = async (id: string) => {
     const userToDelete = users.find((user) => user.id === id)
     if (!userToDelete) return
+
+    if (userToDelete.isDeletionProtected) {
+      toast({
+        title: "الحذف غير متاح",
+        description: "هذا الحساب محمي ولا يمكن حذفه من النظام",
+        variant: "destructive",
+      })
+      return
+    }
 
     setIsSaving(true)
 
@@ -416,18 +457,22 @@ export default function UsersPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
-                          onClick={() => {
-                            setEditingUser(user)
-                            setIsEditDialogOpen(true)
-                          }}
+                          onClick={() => openEditDialog(user)}
                         >
                           <Pencil className="mr-2 h-4 w-4" />
                           تعديل
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="text-red-600" onClick={() => void handleDeleteUser(user.id)}>
-                          <Trash className="mr-2 h-4 w-4" />
-                          حذف
-                        </DropdownMenuItem>
+                        {user.isDeletionProtected ? (
+                          <DropdownMenuItem disabled>
+                            <Trash className="mr-2 h-4 w-4" />
+                            الحذف غير متاح
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem className="text-red-600" onClick={() => void handleDeleteUser(user.id)}>
+                            <Trash className="mr-2 h-4 w-4" />
+                            حذف
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -444,7 +489,16 @@ export default function UsersPage() {
         </Table>
       </div>
 
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <Dialog
+        open={isEditDialogOpen}
+        onOpenChange={(open) => {
+          setIsEditDialogOpen(open)
+          if (!open) {
+            setEditPassword("")
+            setConfirmEditPassword("")
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>تعديل المستخدم</DialogTitle>
@@ -510,6 +564,33 @@ export default function UsersPage() {
                   </SelectContent>
                 </Select>
               </div>
+              {userType === "admin" && (
+                <>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-password">كلمة المرور الجديدة</Label>
+                    <Input
+                      id="edit-password"
+                      type="password"
+                      value={editPassword}
+                      onChange={(e) => setEditPassword(e.target.value)}
+                      placeholder="اتركها فارغة إذا لم ترد تغييرها"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-confirm-password">تأكيد كلمة المرور الجديدة</Label>
+                    <Input
+                      id="edit-confirm-password"
+                      type="password"
+                      value={confirmEditPassword}
+                      onChange={(e) => setConfirmEditPassword(e.target.value)}
+                      placeholder="أعد كتابة كلمة المرور الجديدة"
+                    />
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    مدير النظام فقط يمكنه تعديل كلمة مرور هذا المستخدم من هذه النافذة.
+                  </p>
+                </>
+              )}
             </div>
           )}
           <DialogFooter>
